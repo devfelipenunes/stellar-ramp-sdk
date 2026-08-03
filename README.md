@@ -6,12 +6,12 @@ Desenvolvido por **SDD + TDD**: especificações (Gherkin/ADRs) primeiro, testes
 
 ## Status — 03/08/2026
 
-| Bloco                    | Estado                                           |
-| ------------------------ | ------------------------------------------------ |
-| **Track SDK (Ramp)**     | ✅ green — 27/27 testes                          |
-| **Track Yield (Engine)** | ✅ green — 17/17 testes (inclui oracle + SEP-38) |
-| **Total**                | ✅ **48/48** · typecheck strict limpo            |
-| **apps/demo**            | ✅ server + página + **E2E automatizado**        |
+| Bloco                    | Estado                                                                |
+| ------------------------ | --------------------------------------------------------------------- |
+| **Track SDK (Ramp)**     | ✅ green — 27/27 testes                                               |
+| **Track Yield (Engine)** | ✅ green — 22/22 testes (oracle + SEP-38 + **fonte real de NAV**)     |
+| **Total**                | ✅ **54/54** · typecheck strict limpo                                 |
+| **apps/demo**            | ✅ server + página + **E2E** + oráculo **NAV real** (`/api/nav-live`) |
 
 ## O que é
 
@@ -74,13 +74,14 @@ examples/basic.ts         # SDK puro em 4 linhas
 ## Extra: segurança e interoperabilidade
 
 - **`NavOracle` multi-fonte** (`packages/yield`) — mediana robusta com detecção de outliers (5% vs mediana). Mitiga o exploit da Blend (fev/2026): oráculo VWAP único manipulado (USTRY $1,06 → $106,74). Spec `specs/features/nav-oracle.feature`.
+- **Fonte REAL de NAV** — `EtherfuseNavSource` via `GET https://api.etherfuse.com/lookup/stablebonds` (**público**, sem API key; cache 5min). Shape confirmado ao vivo (TESOURO 1.236815 · CETES 1.174769 · USTRY 1.071279). É a 1ª fonte do oráculo no demo (`/api/nav-live`).
 - **SEP-38 para stablebonds** — `toSep38Quote()` converte a `BondQuote` para o formato SEP-38 (assets identificados, 7 casas decimais, expiração, price). A pesquisa apontou SEP-38 de stablebond como "espaço aberto". Spec `specs/features/sep38.feature`.
 
 ## Comandos
 
 ```bash
 npm install
-npm test                  # 48/48 (SDK + Yield + E2E demo)
+npm test                  # 54/54 (SDK + Yield + E2E demo)
 npm run typecheck         # tsc strict (src + testes de ambos os packages)
 bun examples/basic.ts     # exemplo SDK (mock)
 bun apps/demo/server.ts   # demo completo

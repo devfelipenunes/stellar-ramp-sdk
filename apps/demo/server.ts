@@ -4,10 +4,12 @@
  * Wire (ADR-003): PIX → [ramp.onramp] → USDC → [yield.autoPark] → TESOURO → rendendo
  *                gasto → [yield.liquidate JIT] → USDC → [ramp.offramp] → fiat
  *
- * Tudo em modo "mock" (ADR-004/012) — roda offline, determinístico, sem keys.
+ * Ramp/yield em modo "mock" (ADR-004/012). O NAV vem de duas fontes:
+ *  - fonte local (mock, determinística) para o balance do demo
+ *  - fonte REAL da Etherfuse (GET /lookup/stablebonds — público) no oráculo `/api/nav-live`
  *
  *   bun apps/demo/server.ts        # sobe o servidor
- *   export function createDemoServer()  # usado pelo teste E2E (apps/demo/tests)
+ *   createDemoServer(opts?)        # usado pelo teste E2E (apps/demo/tests)
  */
 import { createServer, type Server } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -18,8 +20,11 @@ import {
   InMemoryIdentityStore,
 } from "../../packages/sdk/src/index";
 import {
+  createEtherfuseNavSource,
+  createNavOracle,
   createYieldEngine,
   MockStablebondProvider,
+  type NavSource,
 } from "../../packages/yield/src/index";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -33,8 +38,28 @@ const DEMO_PUBKEY = "G-DEMO-USER";
 const USDC_ASSET =
   "USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"; // testnet
 
+/** NAVs de referência da pesquisa — fontes locais do oráculo (ADR-012). */
+const FALLBACK_NAV: Record<string, string> = {
+  TESOURO: "1.23677",
+  CETES: "1.174751",
+  USTRY: "1.07127",
+};
+const mockNav = (id: string): NavSource => ({
+  id,
+  getNav: async (code) => ({
+    code,
+    nav: FALLBACK_NAV[code] ?? "1",
+    updatedAt: new Date().toISOString(),
+  }),
+});
+
+export interface DemoOptions {
+  /** Fonte de NAV do oráculo. Default: Etherfuse real (público). Injetável p/ testes. */
+  navSource?: NavSource;
+}
+
 /** Cria o server do demo (testável). Estado isolado por chamada. */
-export function createDemoServer(): Server {
+export function createDemoServer(opts: DemoOptions = {}): Server {
   const bondsProvider = new MockStablebondProvider();
   const ramp = createRamp({
     mode: "mock",
@@ -46,6 +71,13 @@ export function createDemoServer(): Server {
     provider: bondsProvider,
     allocation: ALLOCATION,
   });
+
+  const navSource = opts.navSource ?? createEtherfuseNavSource();
+  const navOracle = createNavOracle([
+    navSource,
+    mockNav("oracle-agg"),
+    mockNav("defi-lens"),
+  ]);
 
   let userCountry = "BR";
 
@@ -94,6 +126,18 @@ export function createDemoServer(): Server {
     return { liquidatedUsdc, out };
   }
 
+  async function doNavLive() {
+    const out: Record<string, unknown> = {};
+    for (const code of ["TESOURO", "CETES", "USTRY"]) {
+      try {
+        out[code] = await navOracle.getNav(code);
+      } catch (e) {
+        out[code] = { error: e instanceof Error ? e.message : String(e) };
+      }
+    }
+    return out;
+  }
+
   function json(
     res: import("node:http").ServerResponse,
     status: number,
@@ -139,6 +183,10 @@ export function createDemoServer(): Server {
         });
         return;
       }
+      if (req.method === "GET" && url.pathname === "/api/nav-live") {
+        json(res, 200, await doNavLive());
+        return;
+      }
       if (req.method === "POST" && url.pathname === "/api/in") {
         json(res, 200, await doIn(await readBody(req)));
         return;
@@ -170,5 +218,6 @@ if (isMain) {
     console.log(
       `   fluxo: PIX → USDC → TESOURO (${ALLOCATION["BR"]}) → rendendo → gasto JIT`,
     );
+    console.log(`   NAV real da Etherfuse (público): /api/nav-live`);
   });
 }

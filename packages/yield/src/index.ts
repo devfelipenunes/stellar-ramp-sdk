@@ -18,4 +18,6 @@ export type {
 } from "./application/nav-oracle";
 export { toSep38Quote, sep38Amount } from "./application/sep38-quote";
 export type { Sep38Config } from "./application/sep38-quote";
+export { createEtherfuseNavSource } from "./adapters/etherfuse/etherfuse-nav-source";
+export type { EtherfuseNavSourceOptions } from "./adapters/etherfuse/etherfuse-nav-source";
 export * from "./domain";

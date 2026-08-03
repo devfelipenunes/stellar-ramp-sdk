@@ -64,6 +64,13 @@
       <button onclick="spend()">Gastar</button>
       <pre id="out-spend">—</pre>
     </section>
+
+    <section class="card">
+      <h2>4 · NAV real da Etherfuse (oráculo multi-fonte)</h2>
+      <p class="pill" style="display:block;margin:0 0 8px">GET /lookup/stablebonds — público · mediana robusta (ADR-010)</p>
+      <button onclick="navLive()">Consultar NAV ao vivo</button>
+      <pre id="out-nav">—</pre>
+    </section>
   </main>
 
   <script>
@@ -103,7 +110,20 @@
       balance();
     }
 
+    async function navLive() {
+      const res = await api("/api/nav-live");
+      show("out-nav", Object.entries(res)
+        .map(([code, v]) => {
+          const r = v;
+          return r.error
+            ? `→ ${code}: ${r.error}`
+            : `→ ${code}: NAV ${r.nav.nav} (fontes: ${r.sourcesUsed.join(", ")}${r.outliers.length ? " · outliers: " + r.outliers.join(", ") : ""})`;
+        })
+        .join("\n"));
+    }
+
     balance();
+    navLive();
     setInterval(balance, 5000);
   </script>
 </body>

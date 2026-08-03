@@ -1,0 +1,22 @@
+{
+  "name": "stellar-ramp-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Yield-bearing ramp SDK para Stellar — fiat regional ↔ USDC (multi-provider) + auto-park em Stablebonds",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:tdd": "vitest run packages/sdk/tests",
+    "typecheck": "tsc -p packages/sdk/tsconfig.json --noEmit && tsc -p packages/sdk/tsconfig.test.json && tsc -p packages/yield/tsconfig.json --noEmit && tsc -p packages/yield/tsconfig.test.json",
+    "build": "tsc -b"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  }
+}

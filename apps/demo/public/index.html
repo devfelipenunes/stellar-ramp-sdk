@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>stellar-ramp demo · dinheiro nunca fica parado</title>
+  <style>
+    :root { --bg:#0d1117; --card:#161b22; --line:#30363d; --fg:#e6edf3; --muted:#8b949e; --accent:#f0b90b; --ok:#3fb950; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; background:var(--bg); color:var(--fg); }
+    header { padding:24px 32px; border-bottom:1px solid var(--line); }
+    header h1 { margin:0; font-size:18px; }
+    header p { margin:6px 0 0; color:var(--muted); font-size:12px; }
+    main { padding:24px 32px; display:grid; grid-template-columns: repeat(auto-fit,minmax(280px,1fr)); gap:16px; max-width:1100px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; }
+    .card h2 { margin:0 0 12px; font-size:14px; color:var(--accent); }
+    label { display:block; font-size:11px; color:var(--muted); margin:8px 0 4px; }
+    input, select, button { width:100%; padding:8px; border-radius:6px; border:1px solid var(--line); background:#0d1117; color:var(--fg); font:inherit; font-size:13px; }
+    button { background:var(--accent); color:#0d1117; font-weight:700; cursor:pointer; border:none; margin-top:12px; }
+    button:hover { filter:brightness(1.1); }
+    pre { background:#0d1117; border:1px solid var(--line); border-radius:6px; padding:10px; font-size:11px; overflow:auto; max-height:220px; white-space:pre-wrap; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:99px; background:#1c2128; color:var(--muted); font-size:11px; margin:2px; }
+    .ok { color:var(--ok); }
+    #navs { margin-top:8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>⭐ stellar-ramp — yield-bearing ramp SDK</h1>
+    <p>fluxo: <b>PIX → USDC → TESOURO → rendendo (NAV) → gasto JIT</b> · modo mock (determinístico, offline)</p>
+  </header>
+  <main>
+    <section class="card">
+      <h2>1 · Depósito (fiat → USDC → stablebond)</h2>
+      <label>País</label>
+      <select id="country">
+        <option value="BR">Brasil (TESOURO · ~13% APY)</option>
+        <option value="MX">México (CETES · ~5.8%)</option>
+        <option value="US">EUA (USTRY · ~3.2%)</option>
+      </select>
+      <label>Moeda local</label>
+      <select id="fiat">
+        <option value="BRL">BRL</option>
+        <option value="MXN">MXN</option>
+        <option value="USD">USD</option>
+      </select>
+      <label>Montante</label>
+      <input id="amount" type="number" value="100" min="1" step="0.01" />
+      <button onclick="deposit()">Depositar</button>
+      <pre id="out-in">—</pre>
+    </section>
+
+    <section class="card">
+      <h2>2 · Saldo rendendo (NAV ao vivo)</h2>
+      <button onclick="balance()">Atualizar saldo</button>
+      <pre id="out-balance">—</pre>
+      <div id="navs" class="pill">NAVs: …</div>
+    </section>
+
+    <section class="card">
+      <h2>3 · Gasto (liquidação just-in-time)</h2>
+      <label>Gastar (USDC)</label>
+      <input id="spend" type="number" value="20" min="0.01" step="0.01" />
+      <button onclick="spend()">Gastar</button>
+      <pre id="out-spend">—</pre>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const show = (id, v) => { $(id).textContent = typeof v === "string" ? v : JSON.stringify(v, null, 2); };
+
+    async function api(path, body) {
+      const r = await fetch(path, {
+        method: body ? "POST" : "GET",
+        headers: { "Content-Type": "application/json" },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      return r.json();
+    }
+
+    async function deposit() {
+      const res = await api("/api/in", {
+        fiat: $("fiat").value,
+        amount: $("amount").value,
+        country: $("country").value,
+      });
+      show("out-in", `quote: ${res.quote.fiatAmount} ${res.quote.fiat} → ${res.quote.usdcAmount} USDC\norder: ${res.order.status} (${res.order.id})\nautoPark → ${res.position.code}: ${res.position.tokens} tokens (${res.position.fiatValue} ${res.position.fiat})`);
+      balance();
+    }
+
+    async function balance() {
+      const res = await api("/api/balance");
+      show("out-balance", res.balances.length === 0
+        ? "sem posição — faça um depósito"
+        : res.balances.map((b) => `→ ${b.code}: ${b.tokens} tokens × NAV ${b.nav} = ${b.fiatValue} ${b.fiat}`).join("\n"));
+      $("navs").textContent = "NAVs: " + res.navs.map((n) => `${n.code} ${n.nav} ${n.fiat}`).join(" · ");
+    }
+
+    async function spend() {
+      const res = await api("/api/spend", { usdcAmount: $("spend").value });
+      show("out-spend", `liquidado: ${res.liquidatedUsdc} USDC (JIT)\nofframp: ${res.out.status} (${res.out.id})`);
+      balance();
+    }
+
+    balance();
+    setInterval(balance, 5000);
+  </script>
+</body>
+</html>

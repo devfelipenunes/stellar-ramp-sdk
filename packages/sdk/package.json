@@ -1,0 +1,21 @@
+{
+  "name": "@stellar-ramp/sdk",
+  "version": "0.1.0",
+  "description": "Track SDK (Ramp) — ponte fiat regional ↔ USDC com providers swappable (Etherfuse/Koywe/Manteca)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  }
+}

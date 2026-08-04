@@ -81,6 +81,20 @@ describe("createIdvLaunch — hosted /idv verification (Etherfuse)", () => {
     expect(payload.aud).toBe("https://api.etherfuse.com/auth/token");
   });
 
+  it("rejeita returnUrl que não é https (open redirect)", () => {
+    expect(() =>
+      createIdvLaunch({
+        orgId: "o-1",
+        privateKey,
+        issuer: "https://issuer.example.com",
+        keyId: "k",
+        email: "e",
+        name: "n",
+        returnUrl: "javascript:alert(1)",
+      }),
+    ).toThrow(/returnUrl must be an absolute https URL/);
+  });
+
   it("buildIdvLaunchHtml gera um form self-submitting com os campos", () => {
     const html = buildIdvLaunchHtml(launch);
     expect(html).toContain(`action="${launch.action}"`);

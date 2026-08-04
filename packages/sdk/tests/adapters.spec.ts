@@ -335,6 +335,25 @@ describe("EtherfuseProvider — transporte (playbook §1–2)", () => {
     );
   });
 
+  it("getOrder detecta a direção da resposta (offramp), não força onramp", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        orderId: "o-off",
+        type: "offramp",
+        status: "completed",
+        country: "MX",
+        fiat: "MXN",
+      }),
+    });
+
+    const res = await provider.getOrder("o-off");
+
+    expect(res.direction).toBe("offramp");
+    expect(res.status).toBe("completed");
+  });
+
   it("createBankAccount sem id reconhecível na resposta → erro, não persiste ''", async () => {
     fetchMock.mockResolvedValue({
       ok: true,

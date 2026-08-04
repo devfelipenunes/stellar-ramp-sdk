@@ -87,18 +87,24 @@ export function createDemoServer(opts: DemoOptions = {}): Server {
 
   let userCountry = "BR";
 
-  async function doIn(body: { fiat: string; amount: string; country: string }) {
-    userCountry = body.country;
+  const str = (b: Record<string, unknown>, k: string): string =>
+    String(b[k] ?? "");
+
+  async function doIn(body: Record<string, unknown>) {
+    const fiat = str(body, "fiat");
+    const amount = str(body, "amount");
+    const country = str(body, "country") || "BR";
+    userCountry = country;
     const quote = await ramp.quote({
       direction: "onramp",
-      country: body.country,
-      fiat: body.fiat,
-      fiatAmount: body.amount,
+      country,
+      fiat,
+      fiatAmount: amount,
     });
     const order = await ramp.onramp({ quote, pubkey: DEMO_PUBKEY });
     const position = await yields.autoPark({
       usdcAmount: quote.usdcAmount,
-      country: body.country,
+      country,
     });
     return { quote, order, position };
   }
@@ -111,12 +117,12 @@ export function createDemoServer(opts: DemoOptions = {}): Server {
     };
   }
 
-  async function doSpend(body: { usdcAmount: string }) {
+  async function doSpend(body: Record<string, unknown>) {
     const code = ALLOCATION[userCountry] ?? "TESOURO";
     const fiat = userCountry === "MX" ? "MXN" : "BRL";
     const liquidatedUsdc = await yields.liquidate({
       code,
-      usdcAmount: body.usdcAmount,
+      usdcAmount: str(body, "usdcAmount"),
     });
     const qOut = await ramp.quote({
       direction: "offramp",
@@ -157,11 +163,15 @@ export function createDemoServer(opts: DemoOptions = {}): Server {
 
   async function readBody(
     req: import("node:http").IncomingMessage,
-  ): Promise<any> {
+  ): Promise<Record<string, unknown>> {
     const chunks: Buffer[] = [];
     for await (const c of req) chunks.push(c as Buffer);
     const text = Buffer.concat(chunks).toString("utf-8");
-    return text ? JSON.parse(text) : {};
+    if (!text) return {};
+    const parsed = JSON.parse(text);
+    return typeof parsed === "object" && parsed !== null
+      ? (parsed as Record<string, unknown>)
+      : {};
   }
 
   return createServer(async (req, res) => {

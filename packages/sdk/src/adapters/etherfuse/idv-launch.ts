@@ -39,7 +39,11 @@ export interface IdvLaunchOptions {
   email: string;
   /** User's full name. */
   name: string;
-  /** Where to send the user back when they leave /idv. */
+  /**
+   * Where to send the user back when they leave /idv. MUST be an absolute
+   * https URL — the app should restrict it to its own origin to avoid an
+   * open redirect.
+   */
   returnUrl?: string;
   /** Launch scope. Default "idv". */
   scope?: string;
@@ -78,6 +82,11 @@ function base64Url(o: unknown): string {
  * user into the /idv widget.
  */
 export function createIdvLaunch(opts: IdvLaunchOptions): IdvLaunch {
+  if (opts.returnUrl !== undefined && !/^https:\/\//.test(opts.returnUrl)) {
+    throw new Error(
+      "returnUrl must be an absolute https URL (avoid open redirect)",
+    );
+  }
   const env = opts.environment ?? "sandbox";
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: "RS256", typ: "JWT", kid: opts.keyId };

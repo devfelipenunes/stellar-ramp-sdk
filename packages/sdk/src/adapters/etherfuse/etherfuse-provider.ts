@@ -337,10 +337,15 @@ function normalizeOrder(
 ): Order {
   const o = unwrap(raw);
   const id = pickId(o);
+  // Detect direction from the response when present (e.g. GET /ramp/order/{id}),
+  // falling back to the hint from the caller (createOnramp/Offramp).
+  const type = String(o.type ?? o.direction ?? "").toLowerCase();
+  const actualDirection: Order["direction"] =
+    type === "offramp" ? "offramp" : type === "onramp" ? "onramp" : direction;
   return {
     id,
     providerId,
-    direction,
+    direction: actualDirection,
     country: String(o.country ?? "MX"),
     fiat: String(o.fiat ?? "MXN"),
     fiatAmount: String(o.fiatAmount ?? "0"),

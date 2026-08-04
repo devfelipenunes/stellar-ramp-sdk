@@ -114,6 +114,16 @@ const launch = createIdvLaunch({
 - Detalhe: o antigo `POST /ramp/onboarding-url` é **deprecated** — o caminho é
   `/auth/launch` com JWT (o helper acima cobre).
 
+### Notas de uso
+
+- **`quote` real exige `pubkey`**: com provider Etherfuse, `ramp.quote()` sem
+  `pubkey` não tem `customerId` e falha com `quote_requires_customer` (o mock
+  funciona sem). Sempre passe a pubkey do usuário no `quote`.
+- **Offramp**: o shape do quote/order offramp é aproximado (`TODO(sandbox)`) —
+  validar na sandbox antes de produção.
+- **Idempotência**: `orderId`/`quoteId` são gerados a cada chamada; em retries,
+  reutilize a mesma `orderId` para evitar ordem duplicada.
+
 ## Estrutura
 
 ```

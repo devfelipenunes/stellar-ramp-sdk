@@ -1,15 +1,5 @@
 #!/usr/bin/env node
-/**
- * Generates the RSA keypair + public JWKS needed to register the /idv launch
- * issuer with Etherfuse.
- *
- *   node scripts/gen-keys.mjs
- *
- * Outputs to /tmp/etherfuse-keys/:
- *   - jwtRS256.key     PRIVATE key — keep server-side, never expose/commit
- *   - jwtRS256.key.pub public key (PEM) — reference
- *   - jwks.json        public JWKS — host at an https URL and register it
- */
+
 import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 

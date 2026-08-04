@@ -1,11 +1,4 @@
-/**
- * Demo CLI — walks the full SDK flow end-to-end in mock mode.
- *
- *   bun apps/demo/run.ts
- *
- * Flow (ADR-003): quote → onramp (fiat→USDC) → autoPark (USDC→TESOURO) →
- * balance → liquidate JIT (spend) → offramp (USDC→fiat).
- */
+
 import {
   createRamp,
   InMemoryIdentityStore,
@@ -41,7 +34,6 @@ const step = (n: string, title: string, obj: unknown) => {
   console.log(JSON.stringify(obj, null, 2));
 };
 
-// 1. quote
 const quote = await ramp.quote({
   direction: "onramp",
   country: "BR",
@@ -57,7 +49,6 @@ step("1", "QUOTE  —  BRL 100 → USDC", {
   fee: quote.fee,
 });
 
-// 2. onramp
 const order = await ramp.onramp({ quote, pubkey: DEMO_PUBKEY });
 step("2", "ONRAMP  —  fiat → USDC (order)", {
   orderId: order.id,
@@ -65,17 +56,14 @@ step("2", "ONRAMP  —  fiat → USDC (order)", {
   usdcAmount: order.usdcAmount,
 });
 
-// 3. autoPark
 const position = await yields.autoPark({
   usdcAmount: quote.usdcAmount,
   country: "BR",
 });
 step("3", "AUTO-PARK  —  USDC → TESOURO (yield)", position);
 
-// 4. balance
 step("4", "BALANCE", await yields.balance());
 
-// 5. liquidate JIT
 const liquidated = await yields.liquidate({
   code: "TESOURO",
   usdcAmount: "10",
@@ -84,7 +72,6 @@ step("5", "LIQUIDATE JIT  —  TESOURO → USDC (spend)", {
   liquidatedUsdc: liquidated,
 });
 
-// 6. offramp
 const qOut = await ramp.quote({
   direction: "offramp",
   country: "BR",

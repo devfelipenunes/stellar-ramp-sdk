@@ -1,19 +1,10 @@
 #!/usr/bin/env node
-/**
- * Full personal onboarding up to the /idv launch. Creates org + KYC
- * programmatically, signs the verification JWT (same logic as the SDK's
- * createIdvLaunch), POSTs /auth/launch, and prints the result.
- *
- *   ETHERFUSE_API_KEY="api_sand:..." node scripts/confirm-idv.mjs
- *
- * Raws in /tmp/ef-confirm/ (outside the repo).
- */
+
 import { randomUUID, createSign, generateKeyPairSync } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 
-// Real issuer/key: set ETHERFUSE_ISS and put the private key in
-// secrets/etherfuse/jwtRS256.key (or set ETHERFUSE_PRIVATE_KEY_PATH).
-const ISS = process.env.ETHERFUSE_ISS ?? "https://demo.example.com";
+const ISS = process.env.ETHERFUSE_ISS ??
+  "https://gist.github.com/devfelipenunes";
 const PRIV_KEY_PATH = process.env.ETHERFUSE_PRIVATE_KEY_PATH ?? "secrets/etherfuse/jwtRS256.key";
 
 const KEY = process.env.ETHERFUSE_API_KEY ?? process.argv[2];
@@ -31,6 +22,49 @@ const uid = () => randomUUID();
 const jh = (h) => ({ Authorization: KEY, "Content-Type": "application/json", ...h });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const VARIANT = (process.env.VARIANT ?? "BR").toUpperCase();
+if (!["MX", "BR"].includes(VARIANT)) {
+  console.error("VARIANT deve ser BR ou MX");
+  process.exit(1);
+}
+
+const EF_EMAIL = process.env.EF_EMAIL ?? "maria.silva@example.com";
+
+const P = VARIANT === "BR"
+  ? {
+      firstName: "Maria",
+      lastName: "Silva Souza",
+      email: EF_EMAIL,
+      taxId: "52998224725",
+      dateOfBirth: "1992-05-20",
+      country: "BRA",
+      address: {
+        street: "Av Paulista 1000",
+        city: "Sao Paulo",
+        region: "SP",
+        postalCode: "01310-100",
+        country: "BRA",
+      },
+      pix: { pixKey: EF_EMAIL, pixKeyType: "EMAIL" },
+      quoteSource: "BRL",
+    }
+  : {
+      firstName: "Juan",
+      lastName: "Perez Lopez",
+      email: "demo@example.com",
+      taxId: "XEXX010101000",
+      dateOfBirth: "1990-01-01",
+      country: "MEX",
+      address: {
+        street: "Av Reforma 123",
+        city: "CDMX",
+        region: "CDMX",
+        postalCode: "06600",
+        country: "MEX",
+      },
+      quoteSource: "MXN",
+    };
+
 const FAKE_JPEG =
   "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==";
 
@@ -43,12 +77,12 @@ function signIdvJwt({ orgId, privateKey, issuer, keyId, email, name }) {
     iss: issuer,
     sub: orgId,
     aud: "https://api.sand.etherfuse.com/auth/token",
-    scope: "idv",
+    scope: "verification",
     jti: uid(),
     email,
     name,
     iat: now,
-    exp: now + 300, // ~5 min
+    exp: now + 300,
   };
   const input = `${b64url(header)}.${b64url(payload)}`;
   const signer = createSign("RSA-SHA256");
@@ -67,26 +101,24 @@ async function req(name, path, init = {}) {
   return { status: res.status, json };
 }
 
-// ── 1. org personal (userInfo.email) ──
 const orgId = uid();
 const org = await fetch(`${BASE}/ramp/organization`, {
   method: "POST", headers: jh(),
   body: JSON.stringify({
     id: orgId,
     accountType: "personal",
-    displayName: "Demo User",
-    userInfo: { displayName: "Demo User", email: "demo@example.com", firstName: "Juan", lastName: "Perez Lopez" },
+    displayName: P.firstName,
+    userInfo: { displayName: P.firstName, email: P.email, firstName: P.firstName, lastName: P.lastName },
   }),
 }).then((r) => r.json());
-console.log(`✓ org = ${orgId}`);
+console.log(`✓ org = ${orgId} (${VARIANT})`);
 
-// ── 2. KYC programmatic ──
 await req("02_verification", `/ramp/customer/${orgId}/verification`, {
   method: "POST",
   body: JSON.stringify({
-    firstName: "Juan", lastName: "Perez Lopez", dateOfBirth: "1990-01-01",
-    taxId: "XEXX010101000", country: "MEX",
-    address: { street: "Av Reforma 123", city: "CDMX", region: "CDMX", postalCode: "06600", country: "MEX" },
+    firstName: P.firstName, lastName: P.lastName, dateOfBirth: P.dateOfBirth,
+    taxId: P.taxId, country: P.country,
+    address: P.address,
   }),
 });
 
@@ -104,11 +136,15 @@ for (let i = 1; i <= 15; i++) {
   form.append("id_type", "ID_CARD");
   form.append("id_front", new Blob([Buffer.from(FAKE_JPEG, "base64")], { type: "image/jpeg" }), "front.jpg");
   form.append("id_back", new Blob([Buffer.from(FAKE_JPEG, "base64")], { type: "image/jpeg" }), "back.jpg");
-  form.append("tax_document", new Blob([Buffer.from(FAKE_JPEG, "base64")], { type: "image/jpeg" }), "tax.jpg");
+  if (VARIANT === "MX") {
+    form.append("tax_document", new Blob([Buffer.from(FAKE_JPEG, "base64")], { type: "image/jpeg" }), "tax.jpg");
+  }
   const res = await fetch(`${BASE}/ramp/customer/${orgId}/verification/documents`, {
     method: "POST", headers: { Authorization: KEY }, body: form,
   });
-  console.log(`\n=== documents → HTTP ${res.status} ===`);
+  const txt = await res.text();
+  await writeFile(`${OUT}/03_documents.json`, JSON.stringify({ status: res.status, body: txt }, null, 2));
+  console.log(`\n=== documents → HTTP ${res.status} === ${txt.slice(0, 200)}`);
 }
 
 await req("04_questionnaire", `/ramp/customer/${orgId}/verification/questionnaire`, {
@@ -116,8 +152,39 @@ await req("04_questionnaire", `/ramp/customer/${orgId}/verification/questionnair
   body: JSON.stringify({ type: "occupation", jobTitle: "Engineer", industry: "1000000" }),
 });
 
-// ── 3. sign the /idv launch JWT (same logic as SDK createIdvLaunch) ──
-// Use the real private key from secrets/ if present; otherwise a mock one.
+if (VARIANT === "BR") {
+  await req("05_bank_account_pix", `/ramp/customer/${orgId}/bank-account`, {
+    method: "POST",
+    body: JSON.stringify({
+      account: {
+        transactionId: uid(),
+        firstName: P.firstName,
+        lastName: P.lastName,
+        cpf: P.taxId,
+        pixKey: P.pix.pixKey,
+        pixKeyType: P.pix.pixKeyType,
+      },
+      skipAutoApproval: false,
+    }),
+  });
+  await req("06_quote_brl", "/ramp/quote", {
+    method: "POST",
+    body: JSON.stringify({
+      quoteId: uid(),
+      customerId: orgId,
+      blockchain: "stellar",
+      wallet: "G-DEMO-WALLET",
+      sourceAmount: "100",
+      quoteAssets: {
+        type: "onramp",
+        sourceAsset: P.quoteSource,
+        targetAsset:
+          "USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+      },
+    }),
+  });
+}
+
 let privateKey;
 try {
   privateKey = await readFile(PRIV_KEY_PATH, "utf8");
@@ -126,46 +193,62 @@ try {
   ({ privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 }));
   console.log("  (sem chave real — usando chave mock. Registre o iss na Etherfuse p/ aceitar)");
 }
-const assertion = signIdvJwt({
+const jwtArgs = {
   orgId,
   privateKey,
-  issuer: ISS, // MUST be an absolute URL (server parses iss as URL)
-  keyId: process.env.ETHERFUSE_KID ?? "demo-key",
-  email: "demo@example.com",
-  name: "Demo User",
-});
+  issuer: ISS,
+  keyId: process.env.ETHERFUSE_KID ?? "5ab266e5-0287-460a-98c6-8dda93a1cac9",
+  email: P.email,
+  name: `${P.firstName} ${P.lastName}`,
+};
+const assertion = signIdvJwt(jwtArgs);
+const launchForm = (assertionValue) =>
+  new URLSearchParams({
+    grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+    assertion: assertionValue,
+    target: "/idv",
+    return_url: "https://example.com/kyc-ok",
+  });
 
 console.log("\n── JWT /idv (createIdvLaunch logic) ──");
 console.log("  sub:", orgId, "| scope: idv | alg: RS256");
 
-// POST the launch form (like the browser would)
-const form = new URLSearchParams({
-  grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-  assertion,
-  target: "/idv",
-  return_url: "https://example.com/kyc-ok",
-});
+const form = launchForm(assertion);
+
 const res = await fetch(LAUNCH, {
   method: "POST",
   headers: { "Content-Type": "application/x-www-form-urlencoded" },
   body: form.toString(),
-  redirect: "manual",
 });
 const text = await res.text();
-console.log(`\n── POST /auth/launch → HTTP ${res.status} ──`);
-console.log("  location:", res.headers.get("location") ?? "(none)");
-console.log("  body:", text.slice(0, 400));
+await writeFile(`${OUT}/07_launch.json`, JSON.stringify({ status: res.status, url: res.url, body: text }, null, 2));
+console.log(`\n── POST /auth/launch → HTTP ${res.status} (final: ${res.url}) ──`);
 
-console.log(`\n── POST /auth/launch: HTTP ${res.status} — ${res.status === 200 ? "LAUNCH ACEITO ✅" : "rejeitado"}`);
-console.log("  body: página", text.includes("idv") || text.includes("next") ? "HTML do /idv (Next.js)" : "(veja o raw)");
+const unknownIssuer = /Unknown\s+issuer:\s*([^"<\\s]+)/i.exec(text)?.[1];
+const rejected = unknownIssuer || /invalid_client|error_description/i.test(text);
+console.log(`\n── POST /auth/launch: ${rejected ? "REJEITADO ⚠" : "LAUNCH ACEITO ✅"}`);
+if (rejected) {
+  console.log(
+    unknownIssuer
+      ? `  error: Unknown issuer: ${unknownIssuer}`
+      : "  error: invalid_client (detalhe em 07_launch.json)",
+  );
+  console.log("  → confira ETHERFUSE_ISS (o iss registrado na Etherfuse) + kid/JWKS.");
+} else {
+  console.log(
+    "  body: página",
+    text.includes("idv") || text.includes("next") ? "HTML do /idv (Next.js)" : "(veja o raw)",
+  );
+}
 
-// Save a self-submitting HTML so the user can open /idv in a real browser
-// (the JWT expires in ~5 minutes — open it fast).
-const hidden = [...form.entries()]
+const userForm = launchForm(signIdvJwt(jwtArgs));
+const hidden = [...userForm.entries()]
   .map(([k, v]) => `  <input type="hidden" name="${k}" value="${v}" />`)
   .join("\n");
 const html = `<form id="idv-launch" method="POST" action="${LAUNCH}">\n${hidden}\n</form>\n<script>document.getElementById("idv-launch").submit()</script>`;
-await writeFile("/tmp/idv-launch.html", html);
-console.log(`\n🌐 ABRA NO NAVEGADOR (rápido — JWT expira em ~5min):\n  file:///tmp/idv-launch.html`);
+
+const LAUNCH_FILE = `/tmp/idv-launch-${orgId}.html`;
+await writeFile(LAUNCH_FILE, html);
+console.log(`\n🌐 ABRA NO NAVEGADOR (rápido — JWT expira em ~5min):\n  file://${LAUNCH_FILE}`);
 console.log("\nDepois de completar o /idv, me avisa que eu rodo o follow-up (conta compliant → ordem).");
 console.log(`\nRaws in ${OUT}/`);

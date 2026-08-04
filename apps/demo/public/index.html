@@ -22,6 +22,10 @@
     .pill { display:inline-block; padding:2px 8px; border-radius:99px; background:#1c2128; color:var(--muted); font-size:11px; margin:2px; }
     .ok { color:var(--ok); }
     #navs { margin-top:8px; }
+    [hidden] { display:none !important; }
+    #idv-modal { position:fixed; inset:0; background:rgba(0,0,0,.65); display:grid; place-items:center; z-index:10; }
+    .modal-box { width:min(440px,90vw); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px; }
+    .modal-box code { background:#0d1117; padding:1px 4px; border-radius:4px; }
   </style>
 </head>
 <body>
@@ -30,6 +34,13 @@
     <p>fluxo: <b>PIX → USDC → TESOURO → rendendo (NAV) → gasto JIT</b> · modo mock (determinístico, offline)</p>
   </header>
   <main>
+    <section class="card">
+      <h2>0 · KYC — WebSDK /idv (conta compliant)</h2>
+      <p class="pill" id="kyc-badge" style="display:block;margin:0 0 8px">carregando…</p>
+      <button id="kyc-btn" onclick="startIdv()">Iniciar verificação /idv</button>
+      <pre id="out-kyc">—</pre>
+    </section>
+
     <section class="card">
       <h2>1 · Depósito (fiat → USDC → stablebond)</h2>
       <label>País</label>
@@ -73,6 +84,22 @@
     </section>
   </main>
 
+  <div id="idv-modal" hidden>
+    <div class="modal-box">
+      <h2>Etherfuse /idv — demo (sandbox auto-aprova)</h2>
+      <p style="margin:0 0 8px;color:var(--muted);font-size:12px">
+        Etapas do widget: <b>1)</b> confirmar email · <b>2)</b> selfie · <b>3)</b> agreements.
+        Em live, o mesmo form posta em <code>launch.action</code> e o usuário retorna via <code>returnUrl</code>.
+      </p>
+      <label>Email</label>
+      <input id="idv-email" value="demo@example.com" />
+      <label>Nome</label>
+      <input id="idv-name" value="Demo User" />
+      <button onclick="completeIdv()">✓ Concluir verificação (webhook kyc_updated)</button>
+      <button onclick="closeIdv()" style="background:#30363d;color:var(--fg)">Fechar</button>
+    </div>
+  </div>
+
   <script>
     const $ = (id) => document.getElementById(id);
     const show = (id, v) => { $(id).textContent = typeof v === "string" ? v : JSON.stringify(v, null, 2); };
@@ -92,6 +119,11 @@
         amount: $("amount").value,
         country: $("country").value,
       });
+      if (res.error) {
+        show("out-in", `⚠ ${res.error}: ${res.message ?? ""}\n→ complete o passo 0 (KYC /idv) primeiro`);
+        refreshKyc();
+        return;
+      }
       show("out-in", `quote: ${res.quote.fiatAmount} ${res.quote.fiat} → ${res.quote.usdcAmount} USDC\norder: ${res.order.status} (${res.order.id})\nautoPark → ${res.position.code}: ${res.position.tokens} tokens (${res.position.fiatValue} ${res.position.fiat})`);
       balance();
     }
@@ -122,8 +154,50 @@
         .join("\n"));
     }
 
+    function kycBadge(status) {
+      const b = $("kyc-badge");
+      if (status === "approved") {
+        b.textContent = "✓ conta compliant — ordens podem fechar";
+        b.classList.add("ok");
+      } else if (status === "pending") {
+        b.textContent = "em análise — aguardando conclusão do /idv";
+        b.classList.remove("ok");
+      } else {
+        b.textContent = "pendente — comece a verificação /idv";
+        b.classList.remove("ok");
+      }
+    }
+
+    async function refreshKyc() {
+      const res = await api("/api/status");
+      kycBadge(res.kyc?.status);
+      $("kyc-btn").hidden = res.kyc?.status === "approved";
+    }
+
+    async function startIdv() {
+      const res = await api("/api/idv-launch");
+      if (res.status === "approved") { refreshKyc(); return; }
+      show("out-kyc", `status: ${res.status} — conta compliant: ${res.compliant}\naction: ${res.action}\nassertion: ${(res.form?.assertion ?? "").slice(0, 48)}…`);
+      $("idv-modal").hidden = false;
+      refreshKyc();
+    }
+
+    function closeIdv() { $("idv-modal").hidden = true; }
+
+    async function completeIdv() {
+      const res = await api("/api/kyc/complete", {});
+      $("idv-modal").hidden = true;
+      show("out-kyc", `✓ ${res.status} — ${res.note ?? "conta compliant"}`);
+      refreshKyc();
+    }
+
+    if (new URLSearchParams(location.search).get("kyc") === "ok") {
+      show("out-kyc", "✓ retorno do /idv (returnUrl) — conta compliant");
+    }
+
     balance();
     navLive();
+    refreshKyc();
     setInterval(balance, 5000);
   </script>
 </body>

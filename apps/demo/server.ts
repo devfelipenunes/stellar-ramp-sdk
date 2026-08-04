@@ -1,18 +1,7 @@
-/**
- * apps/demo — thin HTTP server composing SDK (Ramp) + Yield (Engine).
- *
- * Wire (ADR-003): PIX → [ramp.onramp] → USDC → [yield.autoPark] → TESOURO → yielding
- *                 spend → [yield.liquidate JIT] → USDC → [ramp.offramp] → fiat
- *
- * Ramp/yield in "mock" mode (ADR-004/012). NAV comes from two sources:
- *  - local (mock, deterministic) source for the demo balance
- *  - REAL Etherfuse source (GET /lookup/stablebonds — public) in the `/api/nav-live` oracle
- *
- *   bun apps/demo/server.ts        # starts the server
- *   createDemoServer(opts?)        # used by the E2E test (apps/demo/tests)
- */
+
 import { createServer, type Server } from "node:http";
 import { generateKeyPairSync } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
@@ -39,9 +28,8 @@ const ALLOCATION: Record<string, string> = {
 };
 const DEMO_PUBKEY = "G-DEMO-USER";
 const USDC_ASSET =
-  "USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"; // testnet
+  "USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
 
-/** Reference NAVs from the research — oracle local sources (ADR-012). */
 const FALLBACK_NAV: Record<string, string> = {
   TESOURO: "1.23677",
   CETES: "1.174751",
@@ -57,15 +45,33 @@ const mockNav = (id: string): NavSource => ({
 });
 
 export interface DemoOptions {
-  /** NAV source for the oracle. Default: real Etherfuse (public). Injectable for tests. */
+
   navSource?: NavSource;
 }
 
-/** Creates the demo server (testable). State isolated per call. */
 export function createDemoServer(opts: DemoOptions = {}): Server {
-  // Demo-only RSA key for the /idv launch example. A real app keeps its own
-  // private key server-side (registered `iss` + JWKS with Etherfuse).
-  const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+
+  const realIss = process.env.EF_ISS;
+  const privPath =
+    process.env.EF_PRIVATE_KEY_PATH ?? "secrets/etherfuse/jwtRS256.key";
+  const jwksPath = process.env.EF_JWKS_PATH ?? "secrets/etherfuse/jwks.json";
+  let privateKey: string | null = null;
+  let jwksJson: string | null = null;
+  if (realIss) {
+    try {
+      privateKey = readFileSync(join(process.cwd(), privPath), "utf8");
+      jwksJson = readFileSync(join(process.cwd(), jwksPath), "utf8");
+    } catch {
+
+    }
+  }
+  if (!privateKey) {
+    privateKey = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
+  }
+  const idvIssuer = realIss ?? "demo-issuer";
+  const idvKid = realIss
+    ? (process.env.EF_KID ?? "5ab266e5-0287-460a-98c6-8dda93a1cac9")
+    : "demo-key";
   const bondsProvider = new MockStablebondProvider();
   const ramp = createRamp({
     mode: "mock",
@@ -86,6 +92,8 @@ export function createDemoServer(opts: DemoOptions = {}): Server {
   ]);
 
   let userCountry = "BR";
+
+  let kycStatus: "none" | "pending" | "approved" = "none";
 
   const str = (b: Record<string, unknown>, k: string): string =>
     String(b[k] ?? "");
@@ -182,6 +190,8 @@ export function createDemoServer(opts: DemoOptions = {}): Server {
       );
 
       if (req.method === "GET" && url.pathname === "/") {
+
+        if (url.searchParams.get("kyc") === "ok") kycStatus = "approved";
         const html = await readFile(
           join(__dirname, "public", "index.html"),
           "utf-8",
@@ -195,29 +205,58 @@ export function createDemoServer(opts: DemoOptions = {}): Server {
           ok: true,
           mode: "mock",
           tracks: ["sdk-ramp", "yield-engine"],
+          kyc: { status: kycStatus, compliant: kycStatus === "approved" },
           navs: bondsProvider.bonds,
         });
         return;
       }
+      if (req.method === "GET" && url.pathname === "/jwks.json") {
+
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+        });
+        res.end(jwksJson ?? JSON.stringify({ keys: [] }));
+        return;
+      }
       if (req.method === "GET" && url.pathname === "/api/idv-launch") {
-        // Example of the /idv WebSDK link: signs a verification JWT and returns
-        // the /auth/launch form. In prod, orgId = the organizationId returned by
-        // createCustomer, and the private key is the app's (registered iss+JWKS).
+
+        if (kycStatus === "approved") {
+          json(res, 200, { status: "approved", compliant: true });
+          return;
+        }
+
+        const returnUrl = `${url.origin}/?kyc=ok`.replace(
+          /^http:\/\//,
+          "https://",
+        );
         const launch = createIdvLaunch({
           orgId: DEMO_PUBKEY,
           privateKey,
-          issuer: "demo-issuer",
-          keyId: "demo-key",
+          issuer: idvIssuer,
+          keyId: idvKid,
           email: "demo@example.com",
           name: "Demo User",
           environment: "sandbox",
-          returnUrl: `${url.origin}/?kyc=ok`,
+          returnUrl,
         });
+        kycStatus = "pending";
         json(res, 200, {
+          status: "pending",
+          compliant: false,
           action: launch.action,
           form: launch.form,
           html: buildIdvLaunchHtml(launch),
           note: "demo — em prod, use a chave privada do app + iss registrado na Etherfuse",
+        });
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/api/kyc/complete") {
+
+        kycStatus = "approved";
+        json(res, 200, {
+          status: "approved",
+          compliant: true,
+          note: "simula o webhook kyc_updated (status approved) — conta compliant",
         });
         return;
       }
@@ -226,6 +265,15 @@ export function createDemoServer(opts: DemoOptions = {}): Server {
         return;
       }
       if (req.method === "POST" && url.pathname === "/api/in") {
+
+        if (kycStatus !== "approved") {
+          json(res, 409, {
+            error: "kyc_required",
+            message:
+              "Complete o WebSDK /idv para a conta ficar compliant antes de fechar a ordem.",
+          });
+          return;
+        }
         json(res, 200, await doIn(await readBody(req)));
         return;
       }
@@ -244,7 +292,6 @@ export function createDemoServer(opts: DemoOptions = {}): Server {
   });
 }
 
-// Entry point: starts the server when executed directly (bun/node).
 const isMain =
   process.argv[1] !== undefined &&
   import.meta.url === pathToFileURL(process.argv[1]).href;

@@ -3,10 +3,6 @@ import type { Server } from "node:http";
 import { createDemoServer } from "../server";
 import type { NavSource } from "../../../packages/yield/src/index";
 
-/**
- * Fonte de NAV fixa injetada no demo — mantém o E2E determinístico
- * (o runtime usa a fonte REAL da Etherfuse).
- */
 const fakeNavSource: NavSource = {
   id: "etherfuse",
   getNav: async (code) => ({
@@ -43,18 +39,63 @@ const post = (path: string, body: unknown) =>
     body: JSON.stringify(body),
   }).then((r) => r.json());
 
-/**
- * E2E do demo — prova o fluxo completo em modo mock, via HTTP real.
- */
-describe("apps/demo — E2E (PIX → USDC → TESOURO → rendendo → gasto JIT)", () => {
-  it("status revela as duas tracks e os NAVs", async () => {
+describe("apps/demo — E2E (KYC /idv → PIX → USDC → TESOURO → rendendo → gasto JIT)", () => {
+  it("status revela as duas tracks, os NAVs e o estado KYC inicial", async () => {
     const res = await fetch(`${baseUrl}/api/status`).then((r) => r.json());
 
     expect(res.ok).toBe(true);
     expect(res.tracks).toEqual(["sdk-ramp", "yield-engine"]);
+    expect(res.kyc.status).toBe("none");
+    expect(res.kyc.compliant).toBe(false);
     expect(res.navs.some((n: { code: string }) => n.code === "TESOURO")).toBe(
       true,
     );
+  });
+
+  it("depósito é bloqueado antes do /idv (kyc_required — mesmo contrato do live)", async () => {
+    const r = await fetch(`${baseUrl}/api/in`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fiat: "BRL", amount: "100", country: "BR" }),
+    });
+
+    expect(r.status).toBe(409);
+    const res = await r.json();
+    expect(res.error).toBe("kyc_required");
+  });
+
+  it("launch /idv emite o form do WebSDK e marca pending", async () => {
+    const res = await fetch(`${baseUrl}/api/idv-launch`).then((r) => r.json());
+
+    expect(res.status).toBe("pending");
+    expect(res.compliant).toBe(false);
+    expect(res.action).toContain("sandbox.etherfuse.com/auth/launch");
+    expect(res.form.grant_type).toContain("jwt-bearer");
+    expect(res.form.target).toBe("/idv");
+
+    expect(res.form.assertion.split(".")).toHaveLength(3);
+    expect(res.html).toContain("idv-launch");
+
+    const st = await fetch(`${baseUrl}/api/status`).then((r) => r.json());
+    expect(st.kyc.status).toBe("pending");
+  });
+
+  it("?kyc=ok (returnUrl do widget) marca a conta approved/compliant", async () => {
+    await fetch(`${baseUrl}/?kyc=ok`);
+
+    const st = await fetch(`${baseUrl}/api/status`).then((r) => r.json());
+    expect(st.kyc.status).toBe("approved");
+    expect(st.kyc.compliant).toBe(true);
+  });
+
+  it("POST /api/kyc/complete simula o webhook kyc_updated (idempotente)", async () => {
+    const res = await post("/api/kyc/complete", {});
+
+    expect(res.status).toBe("approved");
+    expect(res.compliant).toBe(true);
+
+    const st = await fetch(`${baseUrl}/api/status`).then((r) => r.json());
+    expect(st.kyc.status).toBe("approved");
   });
 
   it("depósito fiat→USDC→TESOURO + saldo rendendo (tokens × NAV)", async () => {
@@ -88,7 +129,6 @@ describe("apps/demo — E2E (PIX → USDC → TESOURO → rendendo → gasto JIT
   it("oráculo de NAV mediana as 3 fontes (real injetada + 2 locais) sem outliers", async () => {
     const res = await fetch(`${baseUrl}/api/nav-live`).then((r) => r.json());
 
-    // mediana de [real 1.236815, local 1.23677, local 1.23677] = 1.23677
     expect(res.TESOURO.nav.nav).toBe("1.23677");
     expect(res.CETES.nav.nav).toBe("1.174751");
     expect(res.USTRY.nav.nav).toBe("1.07127");
@@ -96,11 +136,13 @@ describe("apps/demo — E2E (PIX → USDC → TESOURO → rendendo → gasto JIT
     expect(res.TESOURO.sourcesUsed).toHaveLength(3);
   });
 
-  it("GET / serve a dashboard", async () => {
+  it("GET / serve a dashboard com o card de KYC /idv", async () => {
     const html = await fetch(`${baseUrl}/`).then((r) => r.text());
 
     expect(html).toContain("stellar-ramp");
     expect(html).toContain("autoPark");
     expect(html).toContain("NAV real da Etherfuse");
+    expect(html).toContain("/idv");
+    expect(html).toContain("kyc-badge");
   });
 });

@@ -6,13 +6,13 @@ Desenvolvido por **SDD + TDD**: especificações (Gherkin/ADRs) primeiro, testes
 
 ## Status — 04/08/2026
 
-| Bloco                    | Estado                                                                               |
-| ------------------------ | ------------------------------------------------------------------------------------ |
-| **Track SDK (Ramp)**     | ✅ green — 33/33 testes (adapter Etherfuse real + **2-pass** + idv-launch)           |
-| **Track Yield (Engine)** | ✅ green — 22/22 testes (oracle + SEP-38 + **fonte real de NAV**)                    |
-| **Total**                | ✅ **75/75** · typecheck strict limpo                                                |
-| **apps/demo**            | ✅ server HTTP + **CLI** (`run.ts`) + **E2E** + oráculo **NAV real**                 |
-| **Sandbox Etherfuse**    | ✅ shapes reais confirmados (org 201, bank-account 201, **quote 200**, order 2-pass) |
+| Bloco                    | Estado                                                                                        |
+| ------------------------ | --------------------------------------------------------------------------------------------- |
+| **Track SDK (Ramp)**     | ✅ green — 60/60 testes (adapter Etherfuse real + **2-pass** + idv-launch + **factories DX**) |
+| **Track Yield (Engine)** | ✅ green — 27/27 testes (oracle + SEP-38 + **fonte real de NAV** + **factory DX**)            |
+| **Total**                | ✅ **99/99** · typecheck strict limpo                                                         |
+| **apps/demo**            | ✅ server HTTP + **CLI** (`run.ts`) + **E2E** (KYC /idv → gasto) + oráculo **NAV real**       |
+| **Sandbox Etherfuse**    | ✅ shapes reais confirmados (org 201, bank-account 201, **quote 200**, order 2-pass)          |
 
 ## O que é
 
@@ -31,22 +31,22 @@ bun apps/demo/server.ts        # http://localhost:8787
 
 Fluxo verificado por smoke: `BRL 100 → USDC 18.09 → TESOURO 80.45 tokens (R$ 99,50) → gasto JIT 18.09 USDC → offramp BRL 99.00`.
 
+O dashboard abre com o **passo 0 · KYC `/idv`**: sem conta `compliant` o depósito
+responde `409 kyc_required` — o mock enforca o mesmo contrato do live (ADR-004).
+Em mock o widget é simulado (modal email/selfie/agreements); em live, o mesmo form
+posta em `launch.action` e o usuário retorna via `returnUrl` (`/?kyc=ok`).
+
 ## Uso das tracks
 
-```ts
-import { createRamp, InMemoryIdentityStore } from "@stellar-ramp/sdk";
-import { createYieldEngine, MockStablebondProvider } from "@stellar-ramp/yield";
+Setup em 1 linha por track (as factories montam providers + identityStore +
+secrets com defaults):
 
-const ramp = createRamp({
-  mode: "mock",
-  providers: [],
-  identityStore: new InMemoryIdentityStore(),
-});
-const yield = createYieldEngine({
-  mode: "mock",
-  provider: new MockStablebondProvider(),
-  allocation: { BR: "TESOURO", MX: "CETES", US: "USTRY" },
-});
+```ts
+import { createStellarRamp } from "@stellar-ramp/sdk";
+import { createStellarYield } from "@stellar-ramp/yield";
+
+const ramp = createStellarRamp({ mode: "mock" }); // 1 linha, offline
+const engine = createStellarYield({ mode: "mock" }); // 1 linha, offline
 
 const q = await ramp.quote({
   direction: "onramp",
@@ -55,9 +55,24 @@ const q = await ramp.quote({
   fiatAmount: "100",
 });
 await ramp.onramp({ quote: q, pubkey: "G-ALICE" }); // fiat → USDC
-const pos = await yield.autoPark({ usdcAmount: q.usdcAmount, country: "BR" }); // USDC → TESOURO
-const bal = await yield.balance(); // tokens × NAV (rendendo)
-const spent = await yield.liquidate({ code: "TESOURO", usdcAmount: "20" }); // gasto JIT
+const pos = await engine.autoPark({ usdcAmount: q.usdcAmount, country: "BR" }); // USDC → TESOURO
+const bal = await engine.balance(); // tokens × NAV (rendendo)
+const spent = await engine.liquidate({ code: "TESOURO", usdcAmount: "20" }); // gasto JIT
+```
+
+### Modo live — Etherfuse em 1 factory
+
+A chave vem de `process.env.ETHERFUSE_API_KEY` (EnvSecretProvider + InMemoryIdentityStore
+
+- `createEtherfuseProvider` montados pela factory); troque por `apiKey` para testes/CI:
+
+```ts
+import { createStellarRamp } from "@stellar-ramp/sdk";
+
+const ramp = createStellarRamp({
+  mode: "live",
+  etherfuse: { environment: "sandbox", countries: ["BR", "MX", "US"] },
+});
 ```
 
 ## Produção — fluxo completo (KYC via WebSDK /idv)
@@ -114,6 +129,40 @@ const launch = createIdvLaunch({
 - Detalhe: o antigo `POST /ramp/onboarding-url` é **deprecated** — o caminho é
   `/auth/launch` com JWT (o helper acima cobre).
 
+### Embedded wallet — ordem PIX (fluxo validado na sandbox 04/08/2026)
+
+O onramp real usa um **embedded wallet** (provider-hosted), não a pubkey do
+usuário. O SDK cobre o fluxo completo:
+
+```ts
+// 1. provisiona a embedded wallet (P-256) — o wallet que recebe o USDC
+const wallet = await ramp.provisionWallet("etherfuse"); // { walletId, publicKey }
+
+// 2. quote com walletAddress (a publicKey da embedded wallet)
+const q = await ramp.quote({
+  direction: "onramp",
+  country: "BR",
+  fiat: "BRL",
+  fiatAmount: "100",
+  pubkey: userPubkey,
+  walletAddress: wallet.publicKey,
+});
+
+// 3. ordem com cryptoWalletId → depositBankName "PIX" → fiat_received → completed
+const order = await ramp.onramp({
+  quote: q,
+  pubkey: userPubkey,
+  walletAddress: wallet.publicKey,
+  cryptoWalletId: wallet.walletId,
+  bankAccount: pixAccount,
+});
+```
+
+> Sem embedded wallet a ordem rejeita `"Wallet not found or not authorized"` —
+> uma conta Stellar avulsa (mesmo fundada + trustline USDC) **não basta**. O
+> fluxo validado: `POST /ramp/wallet` (signer P-256) → quote `walletAddress` →
+> order `cryptoWalletId` → `fiat_received` → `funded` → `completed`.
+
 ### Notas de uso
 
 - **`quote` real exige `pubkey`**: com provider Etherfuse, `ramp.quote()` sem
@@ -146,7 +195,7 @@ examples/basic.ts         # SDK puro em 4 linhas
 
 ```bash
 pnpm install
-pnpm test                 # 75/75 (SDK + Yield + E2E demo)
+pnpm test                 # 99/99 (SDK + Yield + E2E demo)
 pnpm typecheck            # tsc strict (src + testes de ambos os packages)
 bun apps/demo/run.ts      # demo CLI (fluxo completo, mock)
 bun apps/demo/server.ts   # demo HTTP em http://localhost:8787
@@ -154,8 +203,8 @@ bun apps/demo/server.ts   # demo HTTP em http://localhost:8787
 
 ## Pendências (externas / próximos)
 
-- [ ] **App**: integrar o **WebSDK `/idv`** (helper `createIdvLaunch` pronto no SDK) — o elo que faz a conta ficar `compliant` e a ordem fechar na sandbox real
-- [ ] **Registrar `iss` + JWKS** com a Etherfuse (pré-requisito do launch JWT, 1×)
+- [x] **Demo**: WebSDK `/idv` integrado no dashboard (passo 0 · gate `kyc_required` · retorno `?kyc=ok`) — 81/81 testes
+- [ ] **App real**: mesma integração em produção — `iss` + JWKS já registrados na **sandbox** (`secrets/etherfuse/`), faltam os de **prod**
 - [ ] Adapters **Koywe/Manteca** (PIX live BR) — requerem credenciais
 - [ ] Validar variante **offramp** do quote/order na sandbox (shape aproximado hoje)
 

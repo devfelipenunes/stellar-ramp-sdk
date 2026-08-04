@@ -5,3 +5,6 @@ dist/
 .env.*
 .DS_Store
 coverage/
+
+# Chaves JWT Etherfuse (server-side only — ADR-007)
+secrets/

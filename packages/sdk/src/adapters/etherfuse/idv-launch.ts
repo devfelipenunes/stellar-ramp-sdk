@@ -27,7 +27,11 @@ export interface IdvLaunchOptions {
   orgId: string;
   /** RSA private key (PEM) used to sign the JWT (RS256). */
   privateKey: string;
-  /** Your registered issuer (`iss`) with Etherfuse (registered 1× with the team). */
+  /**
+   * Your registered issuer (`iss`) with Etherfuse (registered 1× with the team).
+   * MUST be an absolute URL — the server parses `iss` as a URL and rejects a
+   * bare string with "relative URL without a base".
+   */
   issuer: string;
   /** Key id (`kid`) — must match an entry in your published JWKS. */
   keyId: string;

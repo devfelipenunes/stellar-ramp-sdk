@@ -12,7 +12,7 @@ const { privateKey, publicKey } = generateKeyPairSync("rsa", {
 const launch = createIdvLaunch({
   orgId: "org-123",
   privateKey,
-  issuer: "demo-issuer",
+  issuer: "https://demo.example.com",
   keyId: "demo-key",
   email: "ana@example.com",
   name: "Ana Ejemplo",
@@ -34,7 +34,7 @@ describe("createIdvLaunch — hosted /idv verification (Etherfuse)", () => {
     const { header, payload } = decodeJwt(launch.assertion);
     expect(header).toMatchObject({ alg: "RS256", kid: "demo-key" });
     expect(payload).toMatchObject({
-      iss: "demo-issuer",
+      iss: "https://demo.example.com",
       sub: "org-123", // sub = organizationId do createCustomer (CRÍTICO)
       aud: "https://api.sand.etherfuse.com/auth/token",
       scope: "idv",
@@ -70,7 +70,7 @@ describe("createIdvLaunch — hosted /idv verification (Etherfuse)", () => {
     const prod = createIdvLaunch({
       orgId: "o-1",
       privateKey,
-      issuer: "i",
+      issuer: "https://issuer.example.com",
       keyId: "k",
       email: "e",
       name: "n",

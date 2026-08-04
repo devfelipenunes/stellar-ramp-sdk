@@ -1,15 +1,20 @@
 #!/usr/bin/env node
 /**
- * Fluxo PERSONAL completo para destravar o compliant via /idv (auto-aprova no
- * sandbox): org personal → verification → documents → questionnaire →
- * onboarding-url → imprime o LINK /idv. Depois de abrir no navegador e
- * completar, rodar de novo para verificar approved/compliant e criar a conta.
+ * Full personal onboarding up to the /idv launch. Creates org + KYC
+ * programmatically, signs the verification JWT (same logic as the SDK's
+ * createIdvLaunch), POSTs /auth/launch, and prints the result.
  *
- * Usage: ETHERFUSE_API_KEY="api_sand:..." node scripts/confirm-sandbox.mjs
+ *   ETHERFUSE_API_KEY="api_sand:..." node scripts/confirm-idv.mjs
+ *
  * Raws in /tmp/ef-confirm/ (outside the repo).
  */
-import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { randomUUID, createSign, generateKeyPairSync } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+
+// Real issuer/key: set ETHERFUSE_ISS and put the private key in
+// secrets/etherfuse/jwtRS256.key (or set ETHERFUSE_PRIVATE_KEY_PATH).
+const ISS = process.env.ETHERFUSE_ISS ?? "https://demo.example.com";
+const PRIV_KEY_PATH = process.env.ETHERFUSE_PRIVATE_KEY_PATH ?? "secrets/etherfuse/jwtRS256.key";
 
 const KEY = process.env.ETHERFUSE_API_KEY ?? process.argv[2];
 if (!KEY) {
@@ -18,53 +23,51 @@ if (!KEY) {
 }
 
 const BASE = "https://api.sand.etherfuse.com";
+const LAUNCH = "https://sandbox.etherfuse.com/auth/launch";
 const OUT = "/tmp/ef-confirm";
 await mkdir(OUT, { recursive: true });
 
 const uid = () => randomUUID();
-const results = [];
-const truncate = (s, n = 900) =>
-  s.length > n ? `${s.slice(0, n)}\n…[truncated]` : s;
 const jh = (h) => ({ Authorization: KEY, "Content-Type": "application/json", ...h });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function call(name, path, init = {}, label = path) {
-  const res = await fetch(`${BASE}${path}`, { ...init, headers: jh(init.headers) });
-  const text = await res.text();
-  let json;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    json = text;
-  }
-  const entry = { name, path: label, status: res.status, json };
-  results.push(entry);
-  await writeFile(`${OUT}/${name}.json`, JSON.stringify(entry, null, 2));
-  console.log(`\n=== ${name}  ${label} → HTTP ${res.status} ===`);
-  console.log(truncate(JSON.stringify(json, null, 2)));
-  return { status: res.status, json };
-}
-
-const pickId = (obj, ...keys) => {
-  if (obj && typeof obj === "object")
-    for (const k of keys)
-      if (obj[k] != null && obj[k] !== "") return String(obj[k]);
-  return undefined;
-};
 
 const FAKE_JPEG =
   "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==";
 
-async function getRequirements(orgId) {
-  const res = await fetch(`${BASE}/ramp/customer/${orgId}/kyc?requirements=true`, { headers: jh() });
-  try {
-    return await res.json();
-  } catch {
-    return {};
-  }
+const b64url = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+
+function signIdvJwt({ orgId, privateKey, issuer, keyId, email, name }) {
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT", kid: keyId };
+  const payload = {
+    iss: issuer,
+    sub: orgId,
+    aud: "https://api.sand.etherfuse.com/auth/token",
+    scope: "idv",
+    jti: uid(),
+    email,
+    name,
+    iat: now,
+    exp: now + 300, // ~5 min
+  };
+  const input = `${b64url(header)}.${b64url(payload)}`;
+  const signer = createSign("RSA-SHA256");
+  signer.update(input);
+  return `${input}.${signer.sign(privateKey, "base64url")}`;
 }
 
-// ── 1. org PERSONAL (userInfo.displayName + email — model confirmed) ──
+async function req(name, path, init = {}) {
+  const res = await fetch(`${BASE}${path}`, { ...init, headers: jh(init.headers) });
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); } catch { json = text; }
+  await writeFile(`${OUT}/${name}.json`, JSON.stringify({ status: res.status, json }, null, 2));
+  console.log(`\n=== ${name} → HTTP ${res.status} ===`);
+  console.log(typeof json === "string" ? json : JSON.stringify(json, null, 2).slice(0, 700));
+  return { status: res.status, json };
+}
+
+// ── 1. org personal (userInfo.email) ──
 const orgId = uid();
 const org = await fetch(`${BASE}/ramp/organization`, {
   method: "POST", headers: jh(),
@@ -75,34 +78,27 @@ const org = await fetch(`${BASE}/ramp/organization`, {
     userInfo: { displayName: "Demo User", email: "demo@example.com", firstName: "Juan", lastName: "Perez Lopez" },
   }),
 }).then((r) => r.json());
-console.log(`✓ org sent=${orgId} returned=${pickId(org, "organizationId", "id")}`);
+console.log(`✓ org = ${orgId}`);
 
-// ── 2. verification (country alpha-3 MEX, RFC personal placeholder) ──
-await call("02_verification", `/ramp/customer/${orgId}/verification`, {
+// ── 2. KYC programmatic ──
+await req("02_verification", `/ramp/customer/${orgId}/verification`, {
   method: "POST",
   body: JSON.stringify({
-    firstName: "Juan",
-    lastName: "Perez Lopez",
-    dateOfBirth: "1990-01-01",
-    taxId: "XEXX010101000",
-    country: "MEX",
+    firstName: "Juan", lastName: "Perez Lopez", dateOfBirth: "1990-01-01",
+    taxId: "XEXX010101000", country: "MEX",
     address: { street: "Av Reforma 123", city: "CDMX", region: "CDMX", postalCode: "06600", country: "MEX" },
   }),
-}, `POST .../verification`);
+});
 
-// ── 3. poll requirements até a lista aparecer ──
 for (let i = 1; i <= 15; i++) {
   await sleep(2000);
-  const req = await getRequirements(orgId);
-  const list = Array.isArray(req?.requirements) ? req.requirements : [];
-  console.log(`  → poll ${i}: status=${req?.status} n_req=${list.length}`);
-  if (list.length > 0) {
-    for (const r of list) console.log(`    - ${r.type}: ${r.status} requiresLaunch=${r.requiresLaunch}`);
-    break;
-  }
+  const r = await fetch(`${BASE}/ramp/customer/${orgId}/kyc?requirements=true`, { headers: jh() });
+  const reqs = await r.json();
+  const list = Array.isArray(reqs?.requirements) ? reqs.requirements : [];
+  console.log(`  → poll ${i}: status=${reqs?.status} n_req=${list.length}`);
+  if (list.length) { for (const x of list) console.log(`    - ${x.type}: ${x.status} launch=${x.requiresLaunch}`); break; }
 }
 
-// ── 4. documents (multipart) + questionnaire ──
 {
   const form = new FormData();
   form.append("id_type", "ID_CARD");
@@ -112,95 +108,64 @@ for (let i = 1; i <= 15; i++) {
   const res = await fetch(`${BASE}/ramp/customer/${orgId}/verification/documents`, {
     method: "POST", headers: { Authorization: KEY }, body: form,
   });
-  const t = await res.text();
-  console.log(`\n=== documents → HTTP ${res.status} ===\n${truncate(t)}`);
+  console.log(`\n=== documents → HTTP ${res.status} ===`);
 }
 
-await call("04_questionnaire", `/ramp/customer/${orgId}/verification/questionnaire`, {
+await req("04_questionnaire", `/ramp/customer/${orgId}/verification/questionnaire`, {
   method: "POST",
   body: JSON.stringify({ type: "occupation", jobTitle: "Engineer", industry: "1000000" }),
-}, `POST .../questionnaire`);
-
-// ── 4b. poll até personal_data sair de awaiting_review (auto-aprova?) ──
-let personalOk = false;
-for (let i = 1; i <= 20 && !personalOk; i++) {
-  await sleep(2000);
-  const req = await getRequirements(orgId);
-  const pd = Array.isArray(req?.requirements) ? req.requirements.find((r) => r.type === "personal_data") : null;
-  console.log(`  → poll personal_data ${i}: ${pd?.status} | org status=${req?.status} approvedAt=${req?.approvedAt ?? "-"}`);
-  if (req?.status === "approved" || req?.approvedAt || (pd && pd.status === "approved")) personalOk = true;
-  if (pd && pd.status === "denied") { console.log(`  ⚠️  denied: ${req?.currentRejectionReason}`); break; }
-}
-
-// ── 5. conta bancária PERSONAL (se org começou a aprovar) ──
-const bankRes = await fetch(`${BASE}/ramp/customer/${orgId}/bank-account`, {
-  method: "POST", headers: jh(),
-  body: JSON.stringify({
-    account: {
-      transactionId: uid(),
-      firstName: "Juan",
-      paternalLastName: "Perez",
-      maternalLastName: "Lopez",
-      birthDate: "19900101",
-      birthCountryIsoCode: "MX",
-      curp: "PELJ900101HDFRRL05",
-      rfc: "XEXX010101000",
-      clabe: "012180015000000001",
-    },
-    skipAutoApproval: false,
-  }),
 });
-const bankText = await bankRes.text();
-let bank;
-try { bank = JSON.parse(bankText); } catch { bank = bankText; }
-const bankId = pickId(bank, "bankAccountId", "id");
-console.log(`✓ bank (HTTP ${bankRes.status}) = ${bankId ?? bankText.slice(0, 140)}`);
 
-// ── 6. onboarding-url com o bankAccountId real (gera o LINK /idv) ──
-const WALLET = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
-const urlBody = {
-  customerId: orgId,
-  bankAccountId: bankId ?? uid(),
-  publicKey: WALLET,
-  blockchain: "stellar",
-  userInfo: { displayName: "Demo User", email: "demo@example.com", firstName: "Juan", lastName: "Perez Lopez" },
-};
-for (let t = 0; t < 10; t++) {
-  const { status, json } = await call(
-    `06_url_t${t + 1}`,
-    "/ramp/onboarding-url",
-    { method: "POST", body: JSON.stringify(urlBody) },
-    `POST /ramp/onboarding-url try${t + 1}`,
-  );
-  if (status === 200 || status === 201) {
-    const link = typeof json === "object" ? (json.url ?? json.onboardingUrl ?? json.launchUrl ?? json) : json;
-    console.log(`\n🔗 LINK /idv: ${truncate(JSON.stringify(link), 800)}`);
-    break;
-  }
-  const f = json && typeof json === "object" && typeof json.error === "string"
-    ? json.error.match(/missing field `(\w+)`/)?.[1] ?? null
-    : null;
-  if (!f) {
-    const msg = json?.message ?? json?.error ?? String(json);
-    console.log(`  → (${status}) ${String(msg).slice(0, 160)}`);
-    break;
-  }
-  urlBody[f] = f.includes("bank") ? uid()
-    : f.includes("blockchain") ? "stellar"
-    : f.includes("public") || f.includes("wallet") ? WALLET
-    : f.includes("customer") ? orgId
-    : f.includes("email") ? "demo@example.com"
-    : f.includes("display") || f.includes("name") ? "Demo User"
-    : f.includes("first") ? "Juan"
-    : f.includes("last") ? "Perez Lopez"
-    : "";
-  console.log(`→ url.${f}`);
+// ── 3. sign the /idv launch JWT (same logic as SDK createIdvLaunch) ──
+// Use the real private key from secrets/ if present; otherwise a mock one.
+let privateKey;
+try {
+  privateKey = await readFile(PRIV_KEY_PATH, "utf8");
+  console.log("  usando chave real:", PRIV_KEY_PATH);
+} catch {
+  ({ privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 }));
+  console.log("  (sem chave real — usando chave mock. Registre o iss na Etherfuse p/ aceitar)");
 }
+const assertion = signIdvJwt({
+  orgId,
+  privateKey,
+  issuer: ISS, // MUST be an absolute URL (server parses iss as URL)
+  keyId: process.env.ETHERFUSE_KID ?? "demo-key",
+  email: "demo@example.com",
+  name: "Demo User",
+});
 
-// ── resumo ──
-console.log("\n\n=== SUMMARY ===");
-for (const r of results) {
-  const keys = r.json && typeof r.json === "object" ? Object.keys(r.json).join(",") : typeof r.json;
-  console.log(`${r.name.padEnd(22)} HTTP ${r.status}  ${keys}`);
-}
+console.log("\n── JWT /idv (createIdvLaunch logic) ──");
+console.log("  sub:", orgId, "| scope: idv | alg: RS256");
+
+// POST the launch form (like the browser would)
+const form = new URLSearchParams({
+  grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+  assertion,
+  target: "/idv",
+  return_url: "https://example.com/kyc-ok",
+});
+const res = await fetch(LAUNCH, {
+  method: "POST",
+  headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  body: form.toString(),
+  redirect: "manual",
+});
+const text = await res.text();
+console.log(`\n── POST /auth/launch → HTTP ${res.status} ──`);
+console.log("  location:", res.headers.get("location") ?? "(none)");
+console.log("  body:", text.slice(0, 400));
+
+console.log(`\n── POST /auth/launch: HTTP ${res.status} — ${res.status === 200 ? "LAUNCH ACEITO ✅" : "rejeitado"}`);
+console.log("  body: página", text.includes("idv") || text.includes("next") ? "HTML do /idv (Next.js)" : "(veja o raw)");
+
+// Save a self-submitting HTML so the user can open /idv in a real browser
+// (the JWT expires in ~5 minutes — open it fast).
+const hidden = [...form.entries()]
+  .map(([k, v]) => `  <input type="hidden" name="${k}" value="${v}" />`)
+  .join("\n");
+const html = `<form id="idv-launch" method="POST" action="${LAUNCH}">\n${hidden}\n</form>\n<script>document.getElementById("idv-launch").submit()</script>`;
+await writeFile("/tmp/idv-launch.html", html);
+console.log(`\n🌐 ABRA NO NAVEGADOR (rápido — JWT expira em ~5min):\n  file:///tmp/idv-launch.html`);
+console.log("\nDepois de completar o /idv, me avisa que eu rodo o follow-up (conta compliant → ordem).");
 console.log(`\nRaws in ${OUT}/`);

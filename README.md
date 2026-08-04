@@ -103,6 +103,8 @@ const launch = createIdvLaunch({
 // POST launch.form → launch.action  (ou use buildIdvLaunchHtml(launch))
 ```
 
+- **Demo**: o `apps/demo/server.ts` expõe `GET /api/idv-launch` como exemplo
+  (gera um JWT com chave mock e devolve o form + HTML do launch).
 - **Pré-requisito 1×**: registrar `iss` + JWKS pública com a Etherfuse; org dona
   da key com KYB aprovado (dashboard).
 - **Webhook** `kyc_updated` com `status:"approved"` → a conta bancária nasce

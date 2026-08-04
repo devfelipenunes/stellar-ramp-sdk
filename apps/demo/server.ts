@@ -12,10 +12,13 @@
  *   createDemoServer(opts?)        # used by the E2E test (apps/demo/tests)
  */
 import { createServer, type Server } from "node:http";
+import { generateKeyPairSync } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import {
+  buildIdvLaunchHtml,
+  createIdvLaunch,
   createRamp,
   InMemoryIdentityStore,
 } from "../../packages/sdk/src/index";
@@ -60,6 +63,9 @@ export interface DemoOptions {
 
 /** Creates the demo server (testable). State isolated per call. */
 export function createDemoServer(opts: DemoOptions = {}): Server {
+  // Demo-only RSA key for the /idv launch example. A real app keeps its own
+  // private key server-side (registered `iss` + JWKS with Etherfuse).
+  const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const bondsProvider = new MockStablebondProvider();
   const ramp = createRamp({
     mode: "mock",
@@ -180,6 +186,28 @@ export function createDemoServer(opts: DemoOptions = {}): Server {
           mode: "mock",
           tracks: ["sdk-ramp", "yield-engine"],
           navs: bondsProvider.bonds,
+        });
+        return;
+      }
+      if (req.method === "GET" && url.pathname === "/api/idv-launch") {
+        // Example of the /idv WebSDK link: signs a verification JWT and returns
+        // the /auth/launch form. In prod, orgId = the organizationId returned by
+        // createCustomer, and the private key is the app's (registered iss+JWKS).
+        const launch = createIdvLaunch({
+          orgId: DEMO_PUBKEY,
+          privateKey,
+          issuer: "demo-issuer",
+          keyId: "demo-key",
+          email: "demo@example.com",
+          name: "Demo User",
+          environment: "sandbox",
+          returnUrl: `${url.origin}/?kyc=ok`,
+        });
+        json(res, 200, {
+          action: launch.action,
+          form: launch.form,
+          html: buildIdvLaunchHtml(launch),
+          note: "demo — em prod, use a chave privada do app + iss registrado na Etherfuse",
         });
         return;
       }

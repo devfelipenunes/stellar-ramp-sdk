@@ -1,4 +1,4 @@
-/** Códigos de erro de domínio do Yield — contratados nas specs Gherkin. */
+/** Yield domain error codes — contracted in the Gherkin specs. */
 export type YieldErrorCode =
   | "no_allocation_for_country"
   | "unsupported_bond"
@@ -26,29 +26,29 @@ export const yerr = {
   noAllocationForCountry: (country: string) =>
     new YieldError(
       "no_allocation_for_country",
-      `Nenhuma alocação de stablebond para ${country}`,
+      `No stablebond allocation for ${country}`,
       {
         country,
       },
     ),
   unsupportedBond: (code: string) =>
-    new YieldError("unsupported_bond", `Stablebond não suportado: ${code}`, {
+    new YieldError("unsupported_bond", `Unsupported stablebond: ${code}`, {
       code,
     }),
   noNavSourceAvailable: (code: string) =>
     new YieldError(
       "no_nav_source_available",
-      `Nenhuma fonte de NAV disponível para ${code}`,
+      `No NAV source available for ${code}`,
       { code },
     ),
   invalidSep38Pair: (reason: string) =>
-    new YieldError("invalid_sep38_pair", `Par SEP-38 inválido: ${reason}`, {
+    new YieldError("invalid_sep38_pair", `Invalid SEP-38 pair: ${reason}`, {
       reason,
     }),
   notImplemented: (feature: string) =>
     new YieldError(
       "not_implemented",
-      `TDD fase red — implementação pendente: ${feature}`,
+      `TDD red phase — pending implementation: ${feature}`,
       { feature },
     ),
 } as const;

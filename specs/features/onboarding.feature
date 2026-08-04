@@ -32,6 +32,27 @@ Funcionalidade: Onboarding e identidades (customer / bank / KYC)
     Então o banco do provider é criado sem passar pelo provedor SPEI
     E ordens MXN podem ser simuladas na sandbox
 
+  Cenário: Conta bancária BRL/PIX é criada com os campos do país
+    Dado que o usuário tem uma chave PIX no Brasil
+    Quando o onboarding chama o endpoint de banco por customer
+    Então o SDK envia `POST /ramp/customer/{customer_id}/bank-account`
+    E o payload `account` contém firstName, lastName, cpf, pixKey e pixKeyType
+    E o `transactionId` (idempotency key) é gerado pelo SDK como uuid
+    E o `bankAccountId` devolvido é persistido no IdentityStore
+
+  Cenário: País novo cria nova conta bancária reusando o customer (ADR-013)
+    Dado que o usuário já tem identidade e conta PIX em BR
+    Quando o mesmo usuário onboarda em MX pela primeira vez
+    Então o SDK reusa o customerId existente
+    E cria uma NOVA conta bancária SPEI para MX
+    E persiste as duas contas (BR e MX) no IdentityStore
+
+  Cenário: Dados de conta bancária inválidos falham rápido, sem chamar a rede
+    Dado que o usuário fornece uma CLABE mexicana com tamanho errado
+    Quando o onboarding envia os detalhes da conta
+    Então o SDK rejeita com `bank_account_details_invalid` antes de qualquer fetch
+    E a API do provider não é chamada
+
   Cenário: Pubkeys diferentes geram identidades independentes
     Dado que o IdentityStore tem identidade para a pubkey A
     Quando o usuário com pubkey B passa pelo onboarding

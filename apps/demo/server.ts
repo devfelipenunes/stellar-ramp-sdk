@@ -1,15 +1,15 @@
 /**
- * apps/demo — server HTTP fino que compõe SDK (Ramp) + Yield (Engine).
+ * apps/demo — thin HTTP server composing SDK (Ramp) + Yield (Engine).
  *
- * Wire (ADR-003): PIX → [ramp.onramp] → USDC → [yield.autoPark] → TESOURO → rendendo
- *                gasto → [yield.liquidate JIT] → USDC → [ramp.offramp] → fiat
+ * Wire (ADR-003): PIX → [ramp.onramp] → USDC → [yield.autoPark] → TESOURO → yielding
+ *                 spend → [yield.liquidate JIT] → USDC → [ramp.offramp] → fiat
  *
- * Ramp/yield em modo "mock" (ADR-004/012). O NAV vem de duas fontes:
- *  - fonte local (mock, determinística) para o balance do demo
- *  - fonte REAL da Etherfuse (GET /lookup/stablebonds — público) no oráculo `/api/nav-live`
+ * Ramp/yield in "mock" mode (ADR-004/012). NAV comes from two sources:
+ *  - local (mock, deterministic) source for the demo balance
+ *  - REAL Etherfuse source (GET /lookup/stablebonds — public) in the `/api/nav-live` oracle
  *
- *   bun apps/demo/server.ts        # sobe o servidor
- *   createDemoServer(opts?)        # usado pelo teste E2E (apps/demo/tests)
+ *   bun apps/demo/server.ts        # starts the server
+ *   createDemoServer(opts?)        # used by the E2E test (apps/demo/tests)
  */
 import { createServer, type Server } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -38,7 +38,7 @@ const DEMO_PUBKEY = "G-DEMO-USER";
 const USDC_ASSET =
   "USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"; // testnet
 
-/** NAVs de referência da pesquisa — fontes locais do oráculo (ADR-012). */
+/** Reference NAVs from the research — oracle local sources (ADR-012). */
 const FALLBACK_NAV: Record<string, string> = {
   TESOURO: "1.23677",
   CETES: "1.174751",
@@ -54,11 +54,11 @@ const mockNav = (id: string): NavSource => ({
 });
 
 export interface DemoOptions {
-  /** Fonte de NAV do oráculo. Default: Etherfuse real (público). Injetável p/ testes. */
+  /** NAV source for the oracle. Default: real Etherfuse (public). Injectable for tests. */
   navSource?: NavSource;
 }
 
-/** Cria o server do demo (testável). Estado isolado por chamada. */
+/** Creates the demo server (testable). State isolated per call. */
 export function createDemoServer(opts: DemoOptions = {}): Server {
   const bondsProvider = new MockStablebondProvider();
   const ramp = createRamp({
@@ -206,7 +206,7 @@ export function createDemoServer(opts: DemoOptions = {}): Server {
   });
 }
 
-// Entry point: sobe o servidor quando executado diretamente (bun/node).
+// Entry point: starts the server when executed directly (bun/node).
 const isMain =
   process.argv[1] !== undefined &&
   import.meta.url === pathToFileURL(process.argv[1]).href;
@@ -214,10 +214,10 @@ const isMain =
 if (isMain) {
   const PORT = Number(process.env.PORT ?? 8787);
   createDemoServer().listen(PORT, () => {
-    console.log(`⭐ stellar-ramp demo em http://localhost:${PORT}`);
+    console.log(`⭐ stellar-ramp demo at http://localhost:${PORT}`);
     console.log(
-      `   fluxo: PIX → USDC → TESOURO (${ALLOCATION["BR"]}) → rendendo → gasto JIT`,
+      `   flow: PIX → USDC → TESOURO (${ALLOCATION["BR"]}) → earning → JIT spend`,
     );
-    console.log(`   NAV real da Etherfuse (público): /api/nav-live`);
+    console.log(`   real Etherfuse NAV (public): /api/nav-live`);
   });
 }

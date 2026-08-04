@@ -1,7 +1,7 @@
-// @stellar-ramp/yield — entrada pública da Track Yield (Engine).
+// @stellar-ramp/yield — public entry point of the Track Yield (Engine).
 //
-// Design SDD/TDD: contracts de domínio emergem de specs/features/*.feature;
-// testes em /tests definem o contrato (red → green). ADRs 009–012 em /docs/adr.
+// SDD/TDD design: domain contracts emerge from specs/features/*.feature;
+// tests in /tests define the contract (red → green). ADRs 009–012 in /docs/adr.
 export { createYieldEngine } from "./application/yield-engine";
 export type {
   YieldEngine,

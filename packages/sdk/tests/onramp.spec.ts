@@ -77,4 +77,80 @@ describe("onramp — fiat → USDC (spec onramp.feature)", () => {
     expect(etherfuse.createBankAccount).toHaveBeenCalledTimes(1);
     expect(store.saveIdentity).toHaveBeenCalledTimes(1); // gravou 1×, reusou nas demais
   });
+
+  it("quote com pubkey garante a organização antes de cotar (ADR-005, fluxo invertido)", async () => {
+    const etherfuse = makeProvider("etherfuse", ["MX"]);
+    const store = makeIdentityStore();
+    const ramp = createRamp({
+      mode: "live",
+      providers: [etherfuse],
+      identityStore: store,
+    });
+
+    await ramp.quote({
+      direction: "onramp",
+      country: "MX",
+      fiat: "MXN",
+      fiatAmount: "100",
+      pubkey: "G-USUARIO-1",
+    });
+
+    // o quote com identidade criou a org (customer) e cotou com o customerId
+    expect(etherfuse.createCustomer).toHaveBeenCalledTimes(1);
+    expect(etherfuse.quote).toHaveBeenCalledWith(
+      expect.objectContaining({ customerId: "etherfuse-cust-1" }),
+    );
+    expect(store.map.get("G-USUARIO-1:etherfuse")).toBeDefined();
+  });
+
+  it("quote sem pubkey NÃO cria organização (consulta direta)", async () => {
+    const etherfuse = makeProvider("etherfuse", ["MX"]);
+    const store = makeIdentityStore();
+    const ramp = createRamp({
+      mode: "live",
+      providers: [etherfuse],
+      identityStore: store,
+    });
+
+    await ramp.quote({
+      direction: "onramp",
+      country: "MX",
+      fiat: "MXN",
+      fiatAmount: "100",
+    });
+
+    expect(etherfuse.createCustomer).not.toHaveBeenCalled();
+    expect(store.map.size).toBe(0);
+  });
+
+  it("onramp cota FRESCO (2-pass) com o customerId da identity, não reusa o quote do input", async () => {
+    const etherfuse = makeProvider("etherfuse", ["MX"]);
+    const ramp = createRamp({
+      mode: "live",
+      providers: [etherfuse],
+      identityStore: makeIdentityStore(),
+    });
+    const quote = await ramp.quote({
+      direction: "onramp",
+      country: "MX",
+      fiat: "MXN",
+      fiatAmount: "300",
+    });
+
+    await ramp.onramp({ quote, pubkey: "G-USUARIO-1" });
+
+    // 1x do quote público (sem pubkey) + 1x fresco no onramp com a org
+    expect(etherfuse.quote).toHaveBeenCalledTimes(2);
+    expect(etherfuse.quote).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        customerId: "etherfuse-cust-1",
+        pubkey: "G-USUARIO-1",
+      }),
+    );
+    expect(etherfuse.createOnrampOrder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        quote: expect.objectContaining({ quoteId: "etherfuse-quote-1" }),
+      }),
+    );
+  });
 });

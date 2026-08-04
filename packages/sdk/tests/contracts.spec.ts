@@ -12,6 +12,7 @@ import { makeProvider } from "./fixtures";
 describe("entities — shapes (SDD contracts)", () => {
   it("Quote possui todos os campos contratados na spec quote.feature", () => {
     const quote: Quote = {
+      quoteId: "quote-1",
       providerId: "etherfuse",
       direction: "onramp",
       country: "MX",

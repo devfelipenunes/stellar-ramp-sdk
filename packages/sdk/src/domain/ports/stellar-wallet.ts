@@ -1,13 +1,13 @@
 import type { Amount } from "../entities/money";
 
 /**
- * Port do lado Stellar (chain). Em modo mock, um adapter local resolve;
- * em live, adapters usam js-stellar-sdk + Horizon.
- * Necessário para: verificação de saldo (spec offramp), entrega de USDC
- * (spec onramp) e assinatura de burn.
+ * Stellar (chain) port. In mock mode, a local adapter resolves it;
+ * in live, adapters use js-stellar-sdk + Horizon.
+ * Needed for: balance checks (offramp spec), USDC delivery (onramp spec),
+ * and burn signing.
  */
 export interface StellarWallet {
   getUsdcBalance(pubkey: string, usdcAsset: string): Promise<Amount>;
-  // Fase green: claimable balance (onramp), sign/submit burn (offramp),
+  // Green phase: claimable balance (onramp), sign/submit burn (offramp),
   // pathfinding via Horizon /paths (ADR-006).
 }

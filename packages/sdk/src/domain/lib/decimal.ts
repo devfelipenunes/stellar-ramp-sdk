@@ -1,6 +1,6 @@
 /**
- * Aritmética decimal com BigInt — montantes monetários NUNCA usam float.
- * Escala fixa de 9 casas decimais (1e-9) para conversões com taxa de câmbio.
+ * BigInt decimal arithmetic — monetary amounts NEVER use float.
+ * Fixed scale of 9 decimal places (1e-9) for exchange-rate conversions.
  */
 const SCALE = 10n ** 9n;
 

@@ -1,3 +1,8 @@
+import { randomUUID } from "node:crypto";
+import {
+  type BankAccountDetails,
+  validateBankAccountDetails,
+} from "../../domain/entities/bank-account";
 import type { CountryCode } from "../../domain/entities/country";
 import { err } from "../../domain/entities/errors";
 import type { KycData } from "../../domain/entities/identity";
@@ -12,19 +17,19 @@ import type {
 } from "../../domain/ports/ramp-provider";
 
 /**
- * Adapter Etherfuse — 1º provider real da Track SDK (ADR-002).
+ * Etherfuse adapter — first real provider of the Track SDK (ADR-002).
  *
- * Transporte confirmado pela pesquisa/playbook:
+ * Transport confirmed by research/playbook:
  *  - base: api.sand.etherfuse.com (sandbox) | api.etherfuse.com (prod)
- *  - auth: header `Authorization: <key>` SEM "Bearer" (playbook §1)
+ *  - auth: header `Authorization: <key>` WITHOUT "Bearer" (playbook §1)
  *  - endpoints: /ramp/quote, /ramp/order, /ramp/assets, webhooks
- *  - guarda: cap 500 MXN/quote na sandbox (playbook §2)
- *  - sandbox: depósito simulado via POST /ramp/order/fiat_received
+ *  - guard: 500 MXN/quote cap in sandbox (playbook §2)
+ *  - sandbox: simulated deposit via POST /ramp/order/fiat_received
  *
- * TODO(sandbox): o shape EXATO das respostas precisa ser confirmado com uma
- * API key real via `GET /ramp/assets` (pendência nº 1 da pesquisa). Os
- * normalizers abaixo seguem o padrão aninhado (unwrap `onramp`/`offramp`,
- * orderId/id/order_id) documentado no playbook §5.
+ * TODO(sandbox): the EXACT shape of responses must be confirmed with a real
+ * API key via `GET /ramp/assets` (research pending item #1). The normalizers
+ * below follow the nested pattern (unwrap `onramp`/`offramp`,
+ * orderId/id/order_id) documented in playbook §5.
  */
 export interface EtherfuseProviderOptions {
   baseUrl: string;
@@ -33,9 +38,23 @@ export interface EtherfuseProviderOptions {
   /** Keys via SecretProvider — ADR-007 (server-side only). */
   secrets: SecretProvider;
   keyName?: string;
+  /**
+   * Type of organization/customer created (ADR-005) — confirmed in sandbox:
+   * business accepts country+taxId and is born eligible to receive a bank
+   * account; personal requires userInfo.email. Default business.
+   */
+  accountType?: "personal" | "business";
+  /** Destination USDC asset for onramp — identifier "SYM:ISSUER" (bare "USDC" is rejected). */
+  usdcAsset?: string;
+  /** Blockchain for quote/order. Default stellar. */
+  blockchain?: string;
+  /** Email for personal org (required by Etherfuse — userInfo.email). */
+  customerEmail?: string;
 }
 
 const SANDBOX_QUOTE_CAP = "500"; // MXN — playbook §2
+const DEFAULT_USDC_ASSET =
+  "USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"; // devnet (sandbox)
 
 export function createEtherfuseProvider(
   opts: EtherfuseProviderOptions,
@@ -57,7 +76,7 @@ class EtherfuseProvider implements RampProvider {
     );
     if (!key)
       throw new Error(
-        "ETHERFUSE_API_KEY não configurada via SecretProvider (ADR-007)",
+        "ETHERFUSE_API_KEY not configured via SecretProvider (ADR-007)",
       );
     return { Authorization: key, "Content-Type": "application/json" };
   }
@@ -79,7 +98,7 @@ class EtherfuseProvider implements RampProvider {
   }
 
   async quote(req: QuoteRequest): Promise<Quote> {
-    // Guarda conhecida da sandbox (playbook §2).
+    // Known sandbox guard (playbook §2).
     if (
       this.opts.environment === "sandbox" &&
       req.fiat === "MXN" &&
@@ -88,44 +107,62 @@ class EtherfuseProvider implements RampProvider {
       if (lt(SANDBOX_QUOTE_CAP, req.fiatAmount))
         throw err.sandboxQuoteLimit(`${SANDBOX_QUOTE_CAP} MXN`);
     }
-
-    const raw = await this.request<unknown>("POST", "/ramp/quote", { ...req });
-    return normalizeQuote(raw, req, this.id); // TODO(sandbox): confirmar shape
+    // Real sandbox shape (04/08/2026): the API requires the org to exist
+    // before quoting (customerId) — RampService guarantees it via ensureOrganization.
+    if (!req.customerId) throw err.quoteRequiresCustomer();
+    const usdc = this.opts.usdcAsset ?? DEFAULT_USDC_ASSET;
+    const raw = await this.request<unknown>("POST", "/ramp/quote", {
+      quoteId: randomUUID(), // our idempotency key
+      customerId: req.customerId,
+      blockchain: this.opts.blockchain ?? "stellar",
+      wallet: req.pubkey ?? "",
+      sourceAmount: req.fiatAmount ?? req.usdcAmount ?? "0",
+      quoteAssets: {
+        type: req.direction,
+        // onramp: fiat → USDC (validated in sandbox). offramp: USDC → fiat
+        // (approximately symmetric shape — TODO(sandbox): confirm offramp variant).
+        sourceAsset: req.direction === "onramp" ? req.fiat : usdc,
+        targetAsset: req.direction === "onramp" ? usdc : req.fiat,
+      },
+    });
+    return normalizeQuote(raw, req, this.id);
   }
 
   async createOnrampOrder(req: OnrampOrderRequest): Promise<Order> {
+    // Real 2-pass flow in sandbox: the order references a quoteId from a REAL quote.
     const raw = await this.request<unknown>("POST", "/ramp/order", {
-      type: "onramp",
+      orderId: randomUUID(), // our idempotency key
+      quoteId: req.quote.quoteId,
       customerId: req.customerId,
       bankAccountId: req.bankAccountId,
-      destinationPubkey: req.pubkey,
-      ...req.quote,
+      blockchain: this.opts.blockchain ?? "stellar",
+      wallet: req.pubkey,
     });
-    return normalizeOrder(raw, this.id, "onramp"); // TODO(sandbox): confirmar shape
+    return normalizeOrder(raw, this.id, "onramp");
   }
 
   async createOfframpOrder(req: OfframpOrderRequest): Promise<Order> {
     const raw = await this.request<unknown>("POST", "/ramp/order", {
-      type: "offramp",
+      orderId: randomUUID(),
+      quoteId: req.quote.quoteId,
       customerId: req.customerId,
       bankAccountId: req.bankAccountId,
-      sourcePubkey: req.pubkey,
-      usdcAsset: req.usdcAsset,
-      ...req.quote,
+      blockchain: this.opts.blockchain ?? "stellar",
+      wallet: req.pubkey,
     });
-    return normalizeOrder(raw, this.id, "offramp"); // TODO(sandbox): confirmar shape
+    return normalizeOrder(raw, this.id, "offramp");
   }
 
   async getOrder(orderId: string): Promise<Order> {
     const raw = await this.request<unknown>("GET", `/ramp/order/${orderId}`);
-    return normalizeOrder(raw, this.id, "onramp"); // TODO(sandbox): confirmar shape
+    return normalizeOrder(raw, this.id, "onramp"); // TODO(sandbox): confirm shape
   }
 
-  /** Sandbox-only: simula o depósito fiat (playbook §4). Em prod, SPEI detecta sozinho. */
+  /** Sandbox-only: simulates the fiat deposit (playbook §4). In prod, SPEI detects it on its own. */
   async simulateFiatDeposit(orderId: string): Promise<Order> {
     if (this.opts.environment !== "sandbox") {
       throw new Error(
-        "simulateFiatDeposit é sandbox-only (prod detecta via SPEI)",
+        "simulateFiatDeposit is sandbox-only (prod detects via SPEI)",
       );
     }
     const raw = await this.request<unknown>(
@@ -135,28 +172,55 @@ class EtherfuseProvider implements RampProvider {
     return normalizeOrder(raw, this.id, "onramp");
   }
 
-  async createCustomer(p: { pubkey: string; kyc: KycData }) {
-    const raw = await this.request<unknown>("POST", "/idv/customers", {
-      pubkey: p.pubkey,
-      country: p.kyc.country,
-      // RFC placeholder auto-aprova banco MX (playbook §3)
-      taxId: p.kyc.taxId,
-      kyc: { status: "approved" },
+  async createCustomer(p: {
+    pubkey: string;
+    kyc: KycData;
+  }): Promise<{ customerId: string }> {
+    // Real sandbox behavior (04/08/2026): POST /ramp/organization accepts an
+    // `id` WE generate (becomes the organizationId = customer_id used everywhere — ADR-005).
+    const id = randomUUID();
+    const isBusiness = (this.opts.accountType ?? "business") !== "personal";
+    const raw = await this.request<unknown>("POST", "/ramp/organization", {
+      id,
+      accountType: this.opts.accountType ?? "business",
+      ...(isBusiness
+        ? {
+            country: p.kyc.country,
+            taxId: p.kyc.taxId,
+            displayName: p.kyc.fullName ?? "Customer",
+          }
+        : {
+            displayName: p.kyc.fullName ?? "Customer",
+            userInfo: {
+              displayName: p.kyc.fullName ?? "Customer",
+              email: p.kyc.email ?? this.opts.customerEmail,
+            },
+          }),
     });
-    return { customerId: pickId(unwrap(raw)) }; // TODO(sandbox): confirmar shape
+    return { customerId: pickId(unwrap(raw), id) };
   }
 
   async createBankAccount(p: {
     customerId: string;
     country: CountryCode;
     fiat: string;
-  }) {
-    const raw = await this.request<unknown>("POST", "/ramp/bank_accounts", p);
-    return { bankAccountId: pickId(unwrap(raw)) }; // TODO(sandbox): confirmar shape
+    details?: BankAccountDetails;
+  }): Promise<{ bankAccountId: string }> {
+    if (!p.details) throw err.bankAccountDetailsRequired(p.country);
+    const problems = validateBankAccountDetails(p.details);
+    if (problems.length > 0) throw err.bankAccountDetailsInvalid(problems);
+    // Real per-customer endpoint (doc 03/08/2026); `transactionId` is OUR
+    // idempotency key (uuid), not returned by the API.
+    const path = `/ramp/customer/${p.customerId}/bank-account`;
+    const raw = await this.request<unknown>("POST", path, {
+      account: toEtherfuseAccount(p.details),
+      skipAutoApproval: false,
+    });
+    return { bankAccountId: pickBankId(unwrap(raw), path) }; // TODO(sandbox): confirm shape
   }
 }
 
-// --- normalizers (padrões do playbook §5: respostas aninhadas, id variável) ---
+// --- normalizers (playbook §5 patterns: nested responses, variable id) ---
 
 type Json = Record<string, unknown>;
 
@@ -168,8 +232,62 @@ function unwrap(raw: unknown): Json {
   return (raw ?? {}) as Json;
 }
 
-function pickId(obj: Json): string {
-  return String(obj.orderId ?? obj.id ?? obj.order_id ?? "");
+/**
+ * Maps `BankAccountDetails` to the flattened `account` object expected by
+ * Etherfuse (oneOf inferred from the fields — `kind` is not sent in the
+ * payload). `transactionId` is the idempotency key we generate (doc 03/08/2026).
+ */
+function toEtherfuseAccount(d: BankAccountDetails): Json {
+  const transactionId = randomUUID();
+  switch (d.kind) {
+    case "pix_personal":
+      return {
+        transactionId,
+        firstName: d.firstName,
+        lastName: d.lastName,
+        cpf: d.cpf,
+        pixKey: d.pixKey,
+        pixKeyType: d.pixKeyType,
+      };
+    case "pix_business":
+      return {
+        transactionId,
+        name: d.name,
+        cnpj: d.cnpj,
+        pixKey: d.pixKey,
+        pixKeyType: d.pixKeyType,
+      };
+    case "spei_personal":
+      return {
+        transactionId,
+        firstName: d.firstName,
+        paternalLastName: d.paternalLastName,
+        maternalLastName: d.maternalLastName,
+        birthDate: d.birthDate,
+        birthCountryIsoCode: d.birthCountryIsoCode,
+        curp: d.curp,
+        rfc: d.rfc,
+        clabe: d.clabe,
+      };
+  }
+}
+
+/**
+ * The bank may return the id as bankAccountId/id/order_id (playbook §5).
+ * If no key matches, THROW instead of returning "" — persisting "" in the
+ * IdentityStore would recreate the "Bank account not found" gotcha of ADR-005.
+ */
+function pickBankId(obj: Json, path: string): string {
+  const id = obj.bankAccountId ?? obj.id ?? obj.orderId ?? obj.order_id;
+  if (id === undefined || id === null || String(id).trim() === "")
+    throw err.bankAccountResponseUnrecognized(path);
+  return String(id);
+}
+
+function pickId(obj: Json, fallback = ""): string {
+  return String(
+    obj.organizationId ?? obj.orderId ?? obj.id ?? obj.order_id ?? fallback,
+  );
 }
 
 function pickStatus(obj: Json): Order["status"] {
@@ -177,6 +295,11 @@ function pickStatus(obj: Json): Order["status"] {
   return s;
 }
 
+/**
+ * Normalizes the REAL sandbox quote (04/08/2026): the response carries
+ * `quoteId`, `sourceAmount`, `destinationAmount`, `feeBps`, `feeAmount`.
+ * onramp: sourceAmount = fiat in, destinationAmount = USDC out.
+ */
 function normalizeQuote(
   raw: unknown,
   req: QuoteRequest,
@@ -184,15 +307,25 @@ function normalizeQuote(
 ): Quote {
   const o = unwrap(raw);
   const feeBps = Number(o.feeBps ?? 25);
+  const isOnramp = req.direction === "onramp";
+  const fiatAmount = String(
+    o.sourceAmount ?? o.fiatAmount ?? req.fiatAmount ?? "0",
+  );
+  const usdcAmount = String(
+    isOnramp
+      ? (o.destinationAmount ?? req.usdcAmount ?? "0")
+      : (o.sourceAmount ?? req.usdcAmount ?? "0"),
+  );
   return {
+    quoteId: String(o.quoteId ?? ""),
     providerId,
     direction: req.direction,
     country: req.country,
     fiat: req.fiat,
-    fiatAmount: String(o.fiatAmount ?? req.fiatAmount ?? "0"),
-    usdcAmount: String(o.usdcAmount ?? req.usdcAmount ?? "0"),
+    fiatAmount,
+    usdcAmount,
     feeBps,
-    fee: String(o.fee ?? "0"),
+    fee: String(o.feeAmount ?? o.fee ?? "0"),
     createdAt: String(o.createdAt ?? new Date().toISOString()),
   };
 }

@@ -5,33 +5,49 @@ export type QuoteDirection = "onramp" | "offramp";
 
 export interface QuoteRequest {
   direction: QuoteDirection;
-  /** País do usuário — driver de seleção de provider (ADR-002). */
+  /** User's country — provider selection driver (ADR-002). */
   country: CountryCode;
   fiat: FiatCode;
   /**
-   * onramp: quanto de fiat o usuário manda (obrigatório).
-   * offramp: ignorado (usa `usdcAmount`).
+   * onramp: how much fiat the user sends (required).
+   * offramp: ignored (uses `usdcAmount`).
    */
   fiatAmount?: Amount;
   /**
-   * offramp: quanto de USDC o usuário envia (obrigatório).
-   * onramp: ignorado.
+   * offramp: how much USDC the user sends (required).
+   * onramp: ignored.
    */
   usdcAmount?: Amount;
+  /**
+   * User's Stellar wallet — it is the quote `wallet` in the Etherfuse API.
+   * Required for a real provider (the API requires the org to exist before
+   * quoting); mock/demo don't need it.
+   */
+  pubkey?: string;
+  /**
+   * User's organizationId (ADR-005) — filled by RampService when the quote
+   * runs with an identity. Not a field of the end user.
+   */
+  customerId?: string;
 }
 
 export interface Quote {
+  /**
+   * Real quote id in the API (Etherfuse). The order references this id (2-pass:
+   * quote → order). RampService quotes fresh on onramp/offramp to guarantee it.
+   */
+  quoteId: string;
   providerId: string;
   direction: QuoteDirection;
   country: CountryCode;
   fiat: FiatCode;
-  /** Montante fiat envolvido (in no onramp, out no offramp). */
+  /** Fiat amount involved (in on onramp, out on offramp). */
   fiatAmount: Amount;
-  /** Montante USDC envolvido (out no onramp, in no offramp). */
+  /** USDC amount involved (out on onramp, in on offramp). */
   usdcAmount: Amount;
-  /** Taxa em pontos base (0.25% = 25). */
+  /** Fee in basis points (0.25% = 25). */
   feeBps: number;
-  /** Fee na moeda da perna de entrada (fiat no onramp, USDC no offramp). */
+  /** Fee in the currency of the input leg (fiat on onramp, USDC on offramp). */
   fee: Amount;
   createdAt: string; // ISO 8601
 }

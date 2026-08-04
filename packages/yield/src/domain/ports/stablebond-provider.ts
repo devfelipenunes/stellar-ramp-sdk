@@ -3,18 +3,18 @@ import type { BondPosition, BondQuote } from "../entities/position";
 import type { Nav, Stablebond, StablebondCode } from "../entities/stablebond";
 
 /**
- * Port da Track Yield (ADR-009). Qualquer emissor de RWA/stablebond
- * implementa isto (Etherfuse, Mock). O domínio conhece só USDC↔Stablebond.
+ * Track Yield port (ADR-009). Any RWA/stablebond issuer implements this
+ * (Etherfuse, Mock). The domain only knows USDC↔Stablebond.
  */
 export interface StablebondProvider {
   readonly id: string; // "etherfuse" | "mock"
-  /** Stablebonds suportados (code + NAV + moeda). */
+  /** Supported stablebonds (code + NAV + currency). */
   readonly bonds: Stablebond[];
 
-  /** NAV de 1 token (ADR-010: /lookup/stablebonds, cache ~5min). */
+  /** NAV of 1 token (ADR-010: /lookup/stablebonds, ~5min cache). */
   getNav(code: StablebondCode): Promise<Nav>;
 
-  /** Estimativa USDC → stablebond no NAV (sem mover fundos). */
+  /** USDC → stablebond estimate at NAV (without moving funds). */
   quote(code: StablebondCode, usdcAmount: Amount): Promise<BondQuote>;
 
   /** autoPark: USDC → stablebond. */
@@ -23,6 +23,6 @@ export interface StablebondProvider {
     code: StablebondCode,
   ): Promise<BondPosition>;
 
-  /** liquidate JIT: stablebond → USDC (devolve USDC recebido). */
+  /** liquidate JIT: stablebond → USDC (returns the USDC received). */
   swapBondToUsdc(bondAmount: Amount, code: StablebondCode): Promise<Amount>;
 }

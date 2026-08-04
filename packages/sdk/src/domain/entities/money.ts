@@ -1,7 +1,7 @@
 /**
- * Montantes de dinheiro — sempre como string decimal, nunca float.
- * Float corrompe valores monetários (0.1 + 0.2 != 0.3). O SDK opera com
- * strings e converte no boundary com o provider/chain.
+ * Money amounts — always as decimal strings, never float.
+ * Float corrupts monetary values (0.1 + 0.2 != 0.3). The SDK operates with
+ * strings and converts at the provider/chain boundary.
  */
 export type FiatCode = string; // ISO 4217: "BRL" | "MXN" | "USD" | ...
 export type CryptoCode = "USDC";

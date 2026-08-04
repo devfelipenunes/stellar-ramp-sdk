@@ -17,16 +17,16 @@ export interface AutoParkInput {
 
 export interface LiquidateInput {
   code: StablebondCode;
-  /** Montante em USDC a liquidar (JIT). Omitido = liquida tudo. */
+  /** Amount in USDC to liquidate (JIT). Omitted = liquidate everything. */
   usdcAmount?: Amount;
 }
 
 /**
- * API da Track Yield (Engine):
- *   quote     → USDC → stablebond no NAV (quantos tokens recebo)
- *   autoPark  → move USDC para o stablebond do país (ADR-012)
- *   balance   → posições rendendo ao vivo (tokens × NAV — ADR-010)
- *   liquidate → stablebond → USDC just-in-time no gasto (ADR-011)
+ * Track Yield (Engine) API:
+ *   quote     → USDC → stablebond at NAV (how many tokens you get)
+ *   autoPark  → moves USDC into the country's stablebond (ADR-012)
+ *   balance   → live-yielding positions (tokens × NAV — ADR-010)
+ *   liquidate → stablebond → USDC just-in-time on spend (ADR-011)
  */
 export interface YieldEngine {
   quote(code: StablebondCode, usdcAmount: Amount): Promise<BondQuote>;
@@ -35,13 +35,13 @@ export interface YieldEngine {
   liquidate(input: LiquidateInput): Promise<Amount>;
 }
 
-/** Factory do YieldEngine — fase GREEN. Provider e alocação via config. */
+/** YieldEngine factory — GREEN phase. Provider and allocation from config. */
 export function createYieldEngine(cfg: YieldConfig): YieldEngine {
   return new YieldEngineImpl(cfg);
 }
 
 class YieldEngineImpl implements YieldEngine {
-  /** code → tokens detidos (memória; server trocaria por storage persistente). */
+  /** code → tokens held (in memory; a server would swap for persistent storage). */
   private readonly positions = new Map<StablebondCode, string>();
 
   constructor(private readonly cfg: YieldConfig) {}

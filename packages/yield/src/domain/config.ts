@@ -4,16 +4,16 @@ import type { StablebondProvider } from "./ports/stablebond-provider";
 
 export type YieldMode = "mock" | "live";
 
-/** Alocação por país (ADR-012): BR→TESOURO, MX→CETES, US→USTRY. */
+/** Per-country allocation (ADR-012): BR→TESOURO, MX→CETES, US→USTRY. */
 export type Allocation = Record<CountryCode, StablebondCode>;
 
 export interface YieldConfig {
   mode: YieldMode;
   provider: StablebondProvider;
   allocation: Allocation;
-  /** ADR-011: MVP = 100% auto-park (buffer USDC 0). */
+  /** ADR-011: MVP = 100% auto-park (0 USDC buffer). */
   strategy?: {
-    /** % de buffer em USDC (0 no MVP). */
+    /** USDC buffer % (0 in the MVP). */
     bufferUsdcPct?: number;
   };
 }

@@ -33,6 +33,7 @@ export function makeProvider(
     quote: vi.fn(async (req: QuoteRequest): Promise<Quote> => {
       if (opts.failQuote) throw new Error(`[${id}] rede indisponível`);
       return {
+        quoteId: `${id}-quote-1`,
         providerId: id,
         direction: req.direction,
         country: req.country,

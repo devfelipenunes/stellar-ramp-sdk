@@ -1,3 +1,4 @@
+import type { BankAccountDetails } from "../entities/bank-account";
 import type { CountryCode } from "../entities/country";
 import type { KycData } from "../entities/identity";
 import type { Amount, FiatCode } from "../entities/money";
@@ -5,13 +6,13 @@ import type { Order } from "../entities/order";
 import type { Quote, QuoteRequest } from "../entities/quote";
 
 /**
- * Port da Track SDK — ADR-002. Qualquer provider de ramp implementa isto
- * (Etherfuse, Koywe, Manteca, MockProvider). O domínio só conhece este
- * contrato, nunca o provider em runtime.
+ * Track SDK port — ADR-002. Any ramp provider implements this
+ * (Etherfuse, Koywe, Manteca, MockProvider). The domain only knows this
+ * contract, never the provider at runtime.
  */
 export interface RampProvider {
   readonly id: string; // "etherfuse" | "koywe" | "manteca" | "mock"
-  /** Países onde o provider cobre fiat (on/off-ramp). */
+  /** Countries where the provider covers fiat (on/off-ramp). */
   readonly countries: CountryCode[];
 
   quote(req: QuoteRequest): Promise<Quote>;
@@ -20,7 +21,7 @@ export interface RampProvider {
   createOfframpOrder(req: OfframpOrderRequest): Promise<Order>;
   getOrder(orderId: string): Promise<Order>;
 
-  // Identidade (ADR-005): criadas 1× por usuário e persistidas pelo SDK.
+  // Identity (ADR-005): created 1× per user and persisted by the SDK.
   createCustomer(params: {
     pubkey: string;
     kyc: KycData;
@@ -29,12 +30,19 @@ export interface RampProvider {
     customerId: string;
     country: CountryCode;
     fiat: FiatCode;
+    /**
+     * Per-country bank account details (BRL/PIX, MXN/SPEI...). A real
+     * provider (Etherfuse) requires them; mock ignores. The SDK only sends
+     * them on 1st onboarding (ADR-005) — afterwards the persisted
+     * bankAccountId is reused.
+     */
+    details?: BankAccountDetails;
   }): Promise<{ bankAccountId: string }>;
 }
 
 export interface OnrampOrderRequest {
   quote: Quote;
-  /** Carteira Stellar destino dos USDC. */
+  /** Stellar wallet receiving the USDC. */
   pubkey: string;
   customerId: string;
   bankAccountId: string;
@@ -42,17 +50,18 @@ export interface OnrampOrderRequest {
 
 export interface OfframpOrderRequest {
   quote: Quote;
-  /** Carteira Stellar origem dos USDC (burn). */
+  /** Stellar wallet source of the USDC (burn). */
   pubkey: string;
   customerId: string;
   bankAccountId: string;
-  /** Asset USDC na forma "USDC:ISSUER". */
+  /** USDC asset in the form "USDC:ISSUER". */
   usdcAsset: string;
 }
 
 /**
- * Hook opcional de sandbox: simula o depósito fiat (POST /ramp/order/fiat_received
- * da Etherfuse). Em live, o provider detecta o depósito sozinho (SPEI) — spec onramp.
+ * Optional sandbox hook: simulates the fiat deposit (Etherfuse
+ * POST /ramp/order/fiat_received). In live, the provider detects the deposit
+ * itself (SPEI) — onramp spec.
  */
 export interface SimulatableProvider {
   simulateFiatDeposit(orderId: string): Promise<Order>;

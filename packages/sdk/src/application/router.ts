@@ -3,21 +3,37 @@ import type { Quote, QuoteRequest } from "../domain/entities/quote";
 import type { RampProvider } from "../domain/ports/ramp-provider";
 
 /**
- * Router multi-anchor (ADR-002, spec router.feature).
- * Regra de domínio pura: filtra providers por país, consulta em paralelo,
- * escolhe o de MENOR CUSTO e faz failover quando um provider falha.
+ * Multi-anchor Router (ADR-002, router.feature spec).
+ * Pure domain rule: filters providers by country, queries in parallel,
+ * picks the LOWEST COST one and fails over when a provider fails.
  */
 export class Router {
   constructor(private readonly providers: RampProvider[]) {}
 
-  async quote(req: QuoteRequest): Promise<Quote> {
-    const candidates = this.providers.filter((p) =>
-      p.countries.includes(req.country),
-    );
+  providersFor(country: QuoteRequest["country"]): RampProvider[] {
+    return this.providers.filter((p) => p.countries.includes(country));
+  }
+
+  /**
+   * `prepare` injects per-provider state before quoting (e.g. the org/customerId
+   * the real API requires — ADR-005). Each provider receives the req enriched
+   * with the customerId of ITS OWN organization.
+   */
+  async quote(
+    req: QuoteRequest,
+    prepare?: (
+      p: RampProvider,
+      req: QuoteRequest,
+    ) => Promise<QuoteRequest> | QuoteRequest,
+  ): Promise<Quote> {
+    const candidates = this.providersFor(req.country);
     if (candidates.length === 0) throw err.noProviderForCountry(req.country);
 
     const settled = await Promise.allSettled(
-      candidates.map((p) => p.quote(req)),
+      candidates.map(async (p) => {
+        const enriched = prepare ? await prepare(p, req) : req;
+        return p.quote(enriched);
+      }),
     );
     const fulfilled = settled
       .filter(
@@ -31,7 +47,7 @@ export class Router {
     if (fulfilled.length === 0)
       throw err.allProvidersFailed(req.country, rejected);
 
-    // Menor custo = menor feeBps (proxy simples de custo; evolui para custo total).
+    // Lowest cost = lowest feeBps (simple cost proxy; evolves to total cost).
     fulfilled.sort((a, b) => a.feeBps - b.feeBps);
     return fulfilled[0]!;
   }

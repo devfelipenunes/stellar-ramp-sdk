@@ -5,19 +5,19 @@ import type { BondQuote } from "../domain/entities/position";
 import type { Sep38Quote } from "../domain/entities/sep38";
 
 export interface Sep38Config {
-  /** Issuer do USDC no Stellar (sell_asset). */
+  /** USDC issuer on Stellar (sell_asset). */
   stablecoinIssuer: string;
-  /** Issuer do stablebond (buy_asset). */
+  /** Stablebond issuer (buy_asset). */
   bondIssuer: string;
   quoteId?: string;
-  /** Validade da quote em segundos (default 60). */
+  /** Quote validity in seconds (default 60). */
   expiresInSeconds?: number;
 }
 
 /**
- * Converte uma BondQuote (USDC → stablebond) para o formato SEP-38.
- * Ataca o "espaço aberto" identificado na pesquisa: ninguém expõe quotes
- * SEP-38 de stablebond. Amounts com 7 casas decimais (padrão SEP-38).
+ * Converts a BondQuote (USDC → stablebond) into SEP-38 format.
+ * Attacks the "open space" identified in the research: nobody exposes
+ * SEP-38 quotes for stablebonds. Amounts use 7 decimal places (SEP-38 standard).
  */
 export function toSep38Quote(
   bondQuote: BondQuote,
@@ -26,13 +26,13 @@ export function toSep38Quote(
   if (bondQuote.code === "USDC") {
     throw new YieldError(
       "invalid_sep38_pair",
-      "pair deve ser USDC ↔ stablebond, não USDC ↔ USDC",
+      "pair must be USDC ↔ stablebond, not USDC ↔ USDC",
     );
   }
   if (!cfg.stablecoinIssuer || !cfg.bondIssuer) {
     throw new YieldError(
       "invalid_sep38_pair",
-      "issuers de USDC e do stablebond são obrigatórios",
+      "USDC and stablebond issuers are required",
     );
   }
 
@@ -55,7 +55,7 @@ export function toSep38Quote(
   };
 }
 
-/** Formata para 7 casas decimais fixas (padrão SEP-38). */
+/** Formats to a fixed 7 decimal places (SEP-38 standard). */
 export function sep38Amount(amount: string): string {
   const [int = "0", frac = ""] = amount.split(".");
   return `${int}.${frac.padEnd(7, "0").slice(0, 7)}`;

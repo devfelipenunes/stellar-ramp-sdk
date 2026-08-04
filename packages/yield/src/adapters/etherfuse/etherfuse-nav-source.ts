@@ -3,18 +3,18 @@ import type { Nav, StablebondCode } from "../../domain/entities/stablebond";
 import type { NavSource } from "../../domain/ports/nav-source";
 
 /**
- * Fonte REAL de NAV da Etherfuse — `GET /lookup/stablebonds` é PÚBLICO
- * (sem auth). Shape confirmado em 03/08/2026:
+ * REAL Etherfuse NAV source — `GET /lookup/stablebonds` is PUBLIC
+ * (no auth). Shape confirmed on 03/08/2026:
  *
  *   { calculatedAt, stablebonds: [{ symbol, tokenPriceDecimal, bondCurrency, ... }] }
  *
- * Cache de ~5min (ADR-010). Os swaps on-chain continuam atrás da API key;
- * o NAV de leitura é aberto.
+ * ~5min cache (ADR-010). On-chain swaps still sit behind the API key;
+ * read-only NAV is open.
  */
 export interface EtherfuseNavSourceOptions {
-  /** Default: produção. */
+  /** Default: production. */
   baseUrl?: string;
-  /** Cache TTL em ms (default 5min — ADR-010). */
+  /** Cache TTL in ms (default 5min — ADR-010). */
   cacheTtlMs?: number;
 }
 
@@ -50,7 +50,7 @@ class EtherfuseNavSource implements NavSource {
     if (!tokenPrice) {
       throw new YieldError(
         "unsupported_bond",
-        `Etherfuse não expõe NAV de ${code}`,
+        `Etherfuse does not expose NAV for ${code}`,
         { code },
       );
     }

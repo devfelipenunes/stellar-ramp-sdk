@@ -1,6 +1,6 @@
 /**
- * Port de segredos — ADR-007. O SDK NUNCA recebe keys de código de cliente;
- * adapters buscam via SecretProvider injetado (env, Vault, etc.).
+ * Secrets port — ADR-007. The SDK NEVER receives keys from client code;
+ * adapters fetch them via an injected SecretProvider (env, Vault, etc.).
  */
 export interface SecretProvider {
   get(key: string): Promise<string | undefined>;

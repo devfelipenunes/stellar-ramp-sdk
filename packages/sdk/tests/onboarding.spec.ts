@@ -10,7 +10,14 @@ const identidade = (pubkey: string, providerId: string): Identity => ({
   pubkey,
   providerId,
   customerId: `${providerId}-cust-1`,
-  bankAccountId: `${providerId}-bank-1`,
+  bankAccounts: [
+    {
+      bankAccountId: `${providerId}-bank-1`,
+      providerId,
+      country: "MX",
+      fiat: "MXN",
+    },
+  ],
   createdAt: "2026-08-03T00:00:00.000Z",
 });
 
@@ -51,6 +58,41 @@ describe("onboarding — identidades (spec onboarding.feature, ADR-005)", () => 
 
     expect(etherfuse.createCustomer).toHaveBeenCalledTimes(1);
     expect(store.map.get("G-A:etherfuse")).toBeDefined();
+  });
+
+  it("país novo cria NOVA conta bancária reusando o mesmo customer (ADR-013)", async () => {
+    const etherfuse = makeProvider("etherfuse", ["MX", "BR"]);
+    const store = makeIdentityStore();
+    const ramp = createRamp({
+      mode: "live",
+      providers: [etherfuse],
+      identityStore: store,
+    });
+
+    await ramp.onramp({
+      quote: await ramp.quote({
+        direction: "onramp",
+        country: "MX",
+        fiat: "MXN",
+        fiatAmount: "300",
+      }),
+      pubkey: "G-A",
+    });
+    await ramp.onramp({
+      quote: await ramp.quote({
+        direction: "onramp",
+        country: "BR",
+        fiat: "BRL",
+        fiatAmount: "100",
+      }),
+      pubkey: "G-A",
+    });
+
+    expect(etherfuse.createCustomer).toHaveBeenCalledTimes(1); // customer reusado
+    expect(etherfuse.createBankAccount).toHaveBeenCalledTimes(2); // 1 por país
+    const ident = store.map.get("G-A:etherfuse");
+    expect(ident?.bankAccounts).toHaveLength(2);
+    expect(ident?.bankAccounts.map((b) => b.country)).toEqual(["MX", "BR"]);
   });
 
   it("pubkeys diferentes geram identidades independentes", async () => {

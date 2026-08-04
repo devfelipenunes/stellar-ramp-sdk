@@ -1,3 +1,4 @@
+import type { BankAccountDetails } from "../../domain/entities/bank-account";
 import type { CountryCode } from "../../domain/entities/country";
 import { RampError } from "../../domain/entities/errors";
 import type { KycData } from "../../domain/entities/identity";
@@ -11,11 +12,11 @@ import type {
 } from "../../domain/ports/ramp-provider";
 
 /**
- * MockProvider (ADR-004) — cidadão de 1ª classe, não fallback improvisado.
- * - Determinístico: mesma entrada → mesma saída (spec mock-mode).
- * - Taxas REALISTAS dentro da faixa Etherfuse (0.25%–1.5%).
- * - Mesmo contrato de dados do live (RampProvider).
- * Em modo "mock" o router NÃO toca providers reais.
+ * MockProvider (ADR-004) — a first-class citizen, not an improvised fallback.
+ * - Deterministic: same input → same output (mock-mode spec).
+ * - REALISTIC rates within the Etherfuse range (0.25%–1.5%).
+ * - Same data contract as live (RampProvider).
+ * In "mock" mode the router does NOT touch real providers.
  */
 export interface MockRate {
   fiat: string;
@@ -75,6 +76,7 @@ export class MockProvider implements RampProvider {
       fiatAmount = mul(sub(usdcAmount, fee), rate.usdcPerFiat);
     }
     return {
+      quoteId: `${this.id}-quote-${this.seq++}`,
       providerId: this.id,
       direction: req.direction,
       country: req.country,
@@ -82,7 +84,7 @@ export class MockProvider implements RampProvider {
       fiatAmount,
       usdcAmount,
       feeBps: rate.feeBps,
-      // fee na moeda da perna de entrada (spec quote: fiat no onramp, USDC no offramp)
+      // fee in the currency of the input leg (quote spec: fiat on onramp, USDC on offramp)
       fee: this.fee(
         req.direction === "onramp" ? fiatAmount : usdcAmount,
         rate.feeBps,
@@ -130,6 +132,7 @@ export class MockProvider implements RampProvider {
     customerId: string;
     country: CountryCode;
     fiat: string;
+    details?: BankAccountDetails;
   }) {
     return { bankAccountId: `${this.id}-bank-${this.seq++}` };
   }
@@ -137,9 +140,13 @@ export class MockProvider implements RampProvider {
   private rateFor(fiat: string): MockRate {
     const rate = this.rates.get(fiat);
     if (!rate)
-      throw new RampError("unsupported_fiat", `Moeda sem taxa mock: ${fiat}`, {
-        fiat,
-      });
+      throw new RampError(
+        "unsupported_fiat",
+        `No mock rate for fiat: ${fiat}`,
+        {
+          fiat,
+        },
+      );
     return rate;
   }
 

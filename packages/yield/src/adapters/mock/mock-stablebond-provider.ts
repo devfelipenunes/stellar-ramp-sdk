@@ -10,14 +10,14 @@ import type {
 import type { StablebondProvider } from "../../domain/ports/stablebond-provider";
 
 /**
- * MockStablebondProvider (ADR-012) — determinístico, NAVs e câmbios REALISTAS
- * da pesquisa (ago/2026). Mesmo contrato de dados do live (ADR-009).
+ * MockStablebondProvider (ADR-012) — deterministic, REALISTIC NAVs and FX
+ * rates from the research (Aug/2026). Same data contract as the live provider (ADR-009).
  */
 export interface MockStablebondOptions {
   navs?: Partial<
     Record<StablebondCode, { nav: string; fiat: string; apyPct?: number }>
   >;
-  /** Câmbio fiat por 1 USD (para converter USDC → fiat → tokens). */
+  /** Fiat FX rate per 1 USD (to convert USDC → fiat → tokens). */
   fx?: Record<string, string>;
 }
 
@@ -120,7 +120,7 @@ export class MockStablebondProvider implements StablebondProvider {
   private fxFor(fiat: string): string {
     const fx = this.fx[fiat];
     if (!fx)
-      throw new YieldError("unsupported_bond", `Sem câmbio mock para ${fiat}`, {
+      throw new YieldError("unsupported_bond", `No mock rate for ${fiat}`, {
         fiat,
       });
     return fx;

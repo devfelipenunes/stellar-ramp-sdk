@@ -1,17 +1,17 @@
 import type { Amount, FiatCode } from "./money";
 
-/** Código do Stablebond (asset clássico no Stellar: `CODE:ISSUER`). */
+/** Stablebond code (classic Stellar asset: `CODE:ISSUER`). */
 export type StablebondCode = string; // "TESOURO" | "CETES" | "USTRY" | ...
 
 export interface Stablebond {
   code: StablebondCode;
-  /** Asset "CODE:ISSUER" no Stellar. */
+  /** Asset "CODE:ISSUER" on Stellar. */
   asset: string;
-  /** Moeda do NAV (fiat). */
+  /** NAV currency (fiat). */
   fiat: FiatCode;
-  /** NAV de 1 token (ADR-010: yield = NAV crescente, não rebase). */
+  /** NAV of 1 token (ADR-010: yield = growing NAV, not rebasing). */
   nav: Amount;
-  /** APY de referência (exibição). */
+  /** Reference APY (display). */
   apyPct?: number;
 }
 

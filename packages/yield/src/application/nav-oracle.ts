@@ -7,15 +7,15 @@ const SCALE = 1_000_000_000n;
 const absN = (n: bigint): bigint => (n < 0n ? -n : n);
 
 export interface NavOracleOptions {
-  /** Desvio máximo vs mediana para marcar outlier (default 5%). */
+  /** Max deviation from the median to flag an outlier (default 5%). */
   maxDeviationPct?: number;
 }
 
 export interface NavOracleResult {
   nav: Nav;
-  /** Fontes que entraram na mediana final. */
+  /** Sources used in the final median. */
   sourcesUsed: string[];
-  /** Fontes descartadas como outlier (possível manipulação). */
+  /** Sources discarded as outliers (possible manipulation). */
   outliers: string[];
 }
 
@@ -24,9 +24,9 @@ export interface NavOracle {
 }
 
 /**
- * Oráculo multi-fonte (ADR-010) — mitigação do exploit da Blend (fev/2026):
- * um oráculo VWAP spot único foi manipulado (USTRY $1,06 → $106,74).
- * Aqui o NAV é a mediana robusta de N fontes, com outliers descartados.
+ * Multi-source oracle (ADR-010) — mitigation for the Blend exploit (Feb/2026):
+ * a single spot VWAP oracle was manipulated (USTRY $1.06 → $106.74).
+ * Here the NAV is the robust median of N sources, with outliers discarded.
  */
 export function createNavOracle(
   sources: NavSource[],
@@ -60,7 +60,7 @@ class MultiSourceNavOracle implements NavOracle {
     if (readings.length === 0) {
       throw new YieldError(
         "no_nav_source_available",
-        `Nenhuma fonte de NAV disponível para ${code}`,
+        `No NAV source available for ${code}`,
         {
           code,
         },

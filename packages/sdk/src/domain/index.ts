@@ -1,3 +1,4 @@
+export * from "./entities/bank-account";
 export * from "./entities/country";
 export * from "./entities/money";
 export * from "./entities/quote";

@@ -4,19 +4,19 @@ import type { SecretProvider } from "./ports/secret-provider";
 import type { StellarWallet } from "./ports/stellar-wallet";
 
 /**
- * mock: adapter MockProvider com taxas realistas, sem rede (ADR-004).
- * live: providers reais (Etherfuse/Koywe/Manteca) com keys via SecretProvider.
+ * mock: MockProvider adapter with realistic rates, no network (ADR-004).
+ * live: real providers (Etherfuse/Koywe/Manteca) with keys via SecretProvider.
  */
 export type RampMode = "mock" | "live";
 
 export interface RampConfig {
   mode: RampMode;
-  /** Em modo "live", o router escolhe entre estes por país (ADR-002). */
+  /** In "live" mode, the router picks among these per country (ADR-002). */
   providers: RampProvider[];
-  /** Persistência de identidade (ADR-005). */
+  /** Identity persistence (ADR-005). */
   identityStore: IdentityStore;
-  /** Keys dos adapters — server-side only (ADR-007). */
+  /** Adapter keys — server-side only (ADR-007). */
   secretProvider?: SecretProvider;
-  /** Acesso à chain Stellar (saldo/entrega/burn). */
+  /** Stellar chain access (balance/delivery/burn). */
   stellarWallet?: StellarWallet;
 }

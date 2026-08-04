@@ -1,4 +1,4 @@
-/** Yield domain error codes — contracted in the Gherkin specs. */
+
 export type YieldErrorCode =
   | "no_allocation_for_country"
   | "unsupported_bond"

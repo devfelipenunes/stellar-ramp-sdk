@@ -2,11 +2,6 @@ import { err } from "../domain/entities/errors";
 import type { Quote, QuoteRequest } from "../domain/entities/quote";
 import type { RampProvider } from "../domain/ports/ramp-provider";
 
-/**
- * Multi-anchor Router (ADR-002, router.feature spec).
- * Pure domain rule: filters providers by country, queries in parallel,
- * picks the LOWEST COST one and fails over when a provider fails.
- */
 export class Router {
   constructor(private readonly providers: RampProvider[]) {}
 
@@ -14,11 +9,6 @@ export class Router {
     return this.providers.filter((p) => p.countries.includes(country));
   }
 
-  /**
-   * `prepare` injects per-provider state before quoting (e.g. the org/customerId
-   * the real API requires — ADR-005). Each provider receives the req enriched
-   * with the customerId of ITS OWN organization.
-   */
   async quote(
     req: QuoteRequest,
     prepare?: (
@@ -47,7 +37,6 @@ export class Router {
     if (fulfilled.length === 0)
       throw err.allProvidersFailed(req.country, rejected);
 
-    // Lowest cost = lowest feeBps (simple cost proxy; evolves to total cost).
     fulfilled.sort((a, b) => a.feeBps - b.feeBps);
     return fulfilled[0]!;
   }

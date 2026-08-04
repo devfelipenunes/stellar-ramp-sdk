@@ -7,15 +7,15 @@ const SCALE = 1_000_000_000n;
 const absN = (n: bigint): bigint => (n < 0n ? -n : n);
 
 export interface NavOracleOptions {
-  /** Max deviation from the median to flag an outlier (default 5%). */
+
   maxDeviationPct?: number;
 }
 
 export interface NavOracleResult {
   nav: Nav;
-  /** Sources used in the final median. */
+
   sourcesUsed: string[];
-  /** Sources discarded as outliers (possible manipulation). */
+
   outliers: string[];
 }
 
@@ -23,11 +23,6 @@ export interface NavOracle {
   getNav(code: StablebondCode): Promise<NavOracleResult>;
 }
 
-/**
- * Multi-source oracle (ADR-010) — mitigation for the Blend exploit (Feb/2026):
- * a single spot VWAP oracle was manipulated (USTRY $1.06 → $106.74).
- * Here the NAV is the robust median of N sources, with outliers discarded.
- */
 export function createNavOracle(
   sources: NavSource[],
   opts: NavOracleOptions = {},

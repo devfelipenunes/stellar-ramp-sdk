@@ -1,9 +1,4 @@
-/**
- * Decimal arithmetic with BigInt — monetary amounts NEVER use float.
- * Mirrors `packages/sdk/src/domain/lib/decimal.ts` — the tracks are
- * independent (ADR-003); a `@stellar-ramp/shared` package would unify them.
- * Fixed scale of 9 decimal places (1e-9).
- */
+
 const SCALE = 10n ** 9n;
 
 export function toN(s: string): bigint {

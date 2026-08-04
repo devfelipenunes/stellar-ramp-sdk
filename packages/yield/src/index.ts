@@ -1,13 +1,12 @@
-// @stellar-ramp/yield — public entry point of the Track Yield (Engine).
-//
-// SDD/TDD design: domain contracts emerge from specs/features/*.feature;
-// tests in /tests define the contract (red → green). ADRs 009–012 in /docs/adr.
+
 export { createYieldEngine } from "./application/yield-engine";
 export type {
   YieldEngine,
   AutoParkInput,
   LiquidateInput,
 } from "./application/yield-engine";
+export { createStellarYield } from "./application/stellar-yield";
+export type { StellarYieldOptions } from "./application/stellar-yield";
 export { MockStablebondProvider } from "./adapters/mock/mock-stablebond-provider";
 export type { MockStablebondOptions } from "./adapters/mock/mock-stablebond-provider";
 export { createNavOracle } from "./application/nav-oracle";

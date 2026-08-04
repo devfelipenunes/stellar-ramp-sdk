@@ -1,3 +1,3 @@
-export type FiatCode = string; // ISO 4217: "BRL" | "MXN" | "USD" | ...
+export type FiatCode = string;
 export type CryptoCode = "USDC";
-export type Amount = string; // decimal, ex: "100.00" | "1.23677"
+export type Amount = string;

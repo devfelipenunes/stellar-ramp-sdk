@@ -3,9 +3,6 @@ import { createRamp } from "../src/application/ramp-service";
 import { makeIdentityStore, makeProvider } from "./fixtures";
 import type { Identity } from "../src/domain/entities/identity";
 
-/**
- * TDD — spec onboarding.feature. FASE RED: createRamp é stub.
- */
 const identidade = (pubkey: string, providerId: string): Identity => ({
   pubkey,
   providerId,
@@ -88,8 +85,8 @@ describe("onboarding — identidades (spec onboarding.feature, ADR-005)", () => 
       pubkey: "G-A",
     });
 
-    expect(etherfuse.createCustomer).toHaveBeenCalledTimes(1); // customer reusado
-    expect(etherfuse.createBankAccount).toHaveBeenCalledTimes(2); // 1 por país
+    expect(etherfuse.createCustomer).toHaveBeenCalledTimes(1);
+    expect(etherfuse.createBankAccount).toHaveBeenCalledTimes(2);
     const ident = store.map.get("G-A:etherfuse");
     expect(ident?.bankAccounts).toHaveLength(2);
     expect(ident?.bankAccounts.map((b) => b.country)).toEqual(["MX", "BR"]);

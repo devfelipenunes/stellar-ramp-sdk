@@ -1,7 +1,4 @@
-/**
- * BigInt decimal arithmetic — monetary amounts NEVER use float.
- * Fixed scale of 9 decimal places (1e-9) for exchange-rate conversions.
- */
+
 const SCALE = 10n ** 9n;
 
 export function toN(s: string): bigint {

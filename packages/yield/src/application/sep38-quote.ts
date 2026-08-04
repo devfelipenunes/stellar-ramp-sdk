@@ -5,20 +5,15 @@ import type { BondQuote } from "../domain/entities/position";
 import type { Sep38Quote } from "../domain/entities/sep38";
 
 export interface Sep38Config {
-  /** USDC issuer on Stellar (sell_asset). */
+
   stablecoinIssuer: string;
-  /** Stablebond issuer (buy_asset). */
+
   bondIssuer: string;
   quoteId?: string;
-  /** Quote validity in seconds (default 60). */
+
   expiresInSeconds?: number;
 }
 
-/**
- * Converts a BondQuote (USDC → stablebond) into SEP-38 format.
- * Attacks the "open space" identified in the research: nobody exposes
- * SEP-38 quotes for stablebonds. Amounts use 7 decimal places (SEP-38 standard).
- */
 export function toSep38Quote(
   bondQuote: BondQuote,
   cfg: Sep38Config,
@@ -55,7 +50,6 @@ export function toSep38Quote(
   };
 }
 
-/** Formats to a fixed 7 decimal places (SEP-38 standard). */
 export function sep38Amount(amount: string): string {
   const [int = "0", frac = ""] = amount.split(".");
   return `${int}.${frac.padEnd(7, "0").slice(0, 7)}`;

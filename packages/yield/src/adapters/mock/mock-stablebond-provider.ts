@@ -9,15 +9,11 @@ import type {
 } from "../../domain/entities/stablebond";
 import type { StablebondProvider } from "../../domain/ports/stablebond-provider";
 
-/**
- * MockStablebondProvider (ADR-012) — deterministic, REALISTIC NAVs and FX
- * rates from the research (Aug/2026). Same data contract as the live provider (ADR-009).
- */
 export interface MockStablebondOptions {
   navs?: Partial<
     Record<StablebondCode, { nav: string; fiat: string; apyPct?: number }>
   >;
-  /** Fiat FX rate per 1 USD (to convert USDC → fiat → tokens). */
+
   fx?: Record<string, string>;
 }
 

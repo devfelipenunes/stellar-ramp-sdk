@@ -2,17 +2,13 @@ import { describe, expect, it } from "vitest";
 import { createRamp } from "../src/application/ramp-service";
 import { makeIdentityStore, makeProvider } from "./fixtures";
 
-/**
- * TDD — spec mock-mode.feature + ADR-004.
- * FASE RED: createRamp é stub → modo mock ainda não isola de providers reais.
- */
 describe("mock mode — demo determinística (spec mock-mode.feature)", () => {
   it("mode=mock não chama providers reais (quote resolve offline)", async () => {
     const etherfuse = makeProvider("etherfuse", ["MX"]);
     const koywe = makeProvider("koywe", ["BR"]);
     const ramp = createRamp({
       mode: "mock",
-      providers: [etherfuse, koywe], // reais, mas não devem ser tocados
+      providers: [etherfuse, koywe],
       identityStore: makeIdentityStore(),
     });
 
@@ -26,7 +22,7 @@ describe("mock mode — demo determinística (spec mock-mode.feature)", () => {
     expect(etherfuse.quote).not.toHaveBeenCalled();
     expect(koywe.quote).not.toHaveBeenCalled();
     expect(q.feeBps).toBeGreaterThanOrEqual(0);
-    expect(q.feeBps).toBeLessThanOrEqual(150); // faixa realista Etherfuse 0.25–1.5%
+    expect(q.feeBps).toBeLessThanOrEqual(150);
   });
 
   it("mock é determinístico: mesma entrada → mesmo resultado", async () => {

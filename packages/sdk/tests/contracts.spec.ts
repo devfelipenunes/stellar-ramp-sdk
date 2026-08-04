@@ -4,11 +4,6 @@ import { isSimulatable } from "../src/domain/ports/ramp-provider";
 import type { Quote } from "../src/domain/entities/quote";
 import { makeProvider } from "./fixtures";
 
-/**
- * Testes de CONTRATO — verdes por construção (tipos/entidades puras).
- * Provam que o shape dos entities é coerente com as specs Gherkin.
- * Servem de sanidade: se estes falham, o red abaixo é erro de setup, não semântico.
- */
 describe("entities — shapes (SDD contracts)", () => {
   it("Quote possui todos os campos contratados na spec quote.feature", () => {
     const quote: Quote = {

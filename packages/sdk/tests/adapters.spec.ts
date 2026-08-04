@@ -5,10 +5,6 @@ import { validateBankAccountDetails } from "../src/domain/entities/bank-account"
 import type { Quote, QuoteRequest } from "../src/domain/entities/quote";
 import type { SecretProvider } from "../src/domain/ports/secret-provider";
 
-/**
- * Testes dos adapters (green por construção) — spec mock-mode.feature +
- * transporte Etherfuse (playbook §1–2).
- */
 describe("MockProvider — determinístico e realista (spec mock-mode.feature)", () => {
   const mock = new MockProvider();
 
@@ -25,7 +21,7 @@ describe("MockProvider — determinístico e realista (spec mock-mode.feature)",
     expect(a.usdcAmount).toBe(b.usdcAmount);
     expect(a.fee).toBe(b.fee);
     expect(a.feeBps).toBeGreaterThanOrEqual(0);
-    expect(a.feeBps).toBeLessThanOrEqual(150); // faixa Etherfuse 0.25–1.5%
+    expect(a.feeBps).toBeLessThanOrEqual(150);
     expect(Number(a.usdcAmount)).toBeGreaterThan(0);
     expect(Number(a.fee)).toBeGreaterThan(0);
   });
@@ -37,7 +33,6 @@ describe("MockProvider — determinístico e realista (spec mock-mode.feature)",
       fiat: "MXN",
       usdcAmount: "200",
     });
-    // fee 25bps = 0.50 USDC → net 199.50 → × 18 = 3591 MXN
     expect(q.fiatAmount).toBe("3591");
     expect(q.feeBps).toBe(25);
   });
@@ -203,7 +198,7 @@ describe("EtherfuseProvider — transporte (playbook §1–2)", () => {
           birthCountryIsoCode: "MX",
           curp: "PELJ900101HDFRRL05",
           rfc: "XEXX010101000",
-          clabe: "123", // CLABE exige 18 dígitos
+          clabe: "123",
         },
       }),
     ).rejects.toMatchObject({ code: "bank_account_details_invalid" });
@@ -230,7 +225,7 @@ describe("EtherfuseProvider — transporte (playbook §1–2)", () => {
     expect(url).toBe("https://api.sand.etherfuse.com/ramp/organization");
     expect(init.method).toBe("POST");
     const body = JSON.parse(init.body as string);
-    expect(body.accountType).toBe("business"); // default
+    expect(body.accountType).toBe("business");
     expect(body.country).toBe("MX");
     expect(body.taxId).toBe("XEXX010101000");
     expect(body.id).toMatch(
@@ -328,7 +323,7 @@ describe("EtherfuseProvider — transporte (playbook §1–2)", () => {
     expect(body.quoteId).toBe("q-1");
     expect(body.customerId).toBe("org-1");
     expect(body.bankAccountId).toBe("bank-1");
-    expect(body.wallet).toBe("G-X");
+    expect(body.publicKey).toBe("G-X");
     expect(body.blockchain).toBe("stellar");
     expect(body.orderId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
@@ -358,7 +353,7 @@ describe("EtherfuseProvider — transporte (playbook §1–2)", () => {
     fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ status: "pending" }), // shape inesperado
+      json: async () => ({ status: "pending" }),
     });
 
     await expect(
@@ -377,6 +372,82 @@ describe("EtherfuseProvider — transporte (playbook §1–2)", () => {
       }),
     ).rejects.toMatchObject({ code: "bank_account_response_unrecognized" });
   });
+
+  it("provisionWallet provisiona embedded wallet P-256 (POST /ramp/wallet)", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        walletId: "w-1",
+        publicKey: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+      }),
+    });
+
+    const w = await provider.provisionWallet();
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/ramp/wallet");
+    const body = JSON.parse(init.body as string);
+    expect(body.walletId).toMatch(/^[0-9a-f]{8}-/);
+    expect(body.signer.signerPublicKeyPem).toContain("BEGIN PUBLIC KEY");
+    expect(w.walletId).toBe("w-1");
+    expect(w.publicKey).toBe(
+      "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+    );
+  });
+
+  it("quote com walletAddress (embedded) envia walletAddress em vez de wallet", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        quoteId: "q-1",
+        sourceAmount: "100",
+        destinationAmount: "19.4",
+        feeBps: "20",
+        feeAmount: "0.2",
+        createdAt: "2026-08-04T00:00:00Z",
+      }),
+    });
+
+    await provider.quote({
+      direction: "onramp",
+      country: "MX",
+      fiat: "MXN",
+      fiatAmount: "100",
+      pubkey: "G-X",
+      walletAddress: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+      customerId: "org-1",
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.walletAddress).toBe(
+      "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+    );
+    expect(body.wallet).toBeUndefined();
+  });
+
+  it("createOnrampOrder com cryptoWalletId (embedded) envia cryptoWalletId em vez de publicKey", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ onramp: { orderId: "o1", status: "created" } }),
+    });
+
+    await provider.createOnrampOrder({
+      quote: { quoteId: "q-1" } as Quote,
+      pubkey: "G-X",
+      customerId: "org-1",
+      bankAccountId: "bank-1",
+      cryptoWalletId: "w-1",
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.cryptoWalletId).toBe("w-1");
+    expect(body.publicKey).toBeUndefined();
+  });
 });
 
 describe("validateBankAccountDetails — fail-fast por país", () => {
@@ -386,7 +457,7 @@ describe("validateBankAccountDetails — fail-fast por país", () => {
         kind: "pix_personal",
         firstName: "Fulano",
         lastName: "De Tal",
-        cpf: "123.456.789-09", // formatação aceita, dígitos contam
+        cpf: "123.456.789-09",
         pixKey: "fulano@exemplo.com",
         pixKeyType: "EMAIL",
       }),
@@ -413,8 +484,8 @@ describe("validateBankAccountDetails — fail-fast por país", () => {
       firstName: "Juan",
       paternalLastName: "Pérez",
       maternalLastName: "López",
-      birthDate: "19901301", // mês 13
-      birthCountryIsoCode: "mexico", // minúsculo/por extenso
+      birthDate: "19901301",
+      birthCountryIsoCode: "mexico",
       curp: "curp-curta",
       rfc: "123",
       clabe: "012180015000000001",

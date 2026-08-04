@@ -1,21 +1,12 @@
-/**
- * Exemplo mínimo do SDK — a prova "works in a second app" (spec mock-mode).
- * Modo mock: roda offline, determinístico, sem keys/rede.
- *
- *   bun examples/basic.ts    (ou: npx tsx examples/basic.ts)
- */
-import { createRamp, InMemoryIdentityStore } from "../packages/sdk/src/index";
+
+import { createStellarRamp } from "../packages/sdk/src/index";
+import { createStellarYield } from "../packages/yield/src/index";
 
 async function main(): Promise<void> {
-  // Em modo "mock" o SDK ignora providers reais e usa um MockProvider
-  // determinístico com taxas realistas (ADR-004).
-  const ramp = createRamp({
-    mode: "mock",
-    providers: [],
-    identityStore: new InMemoryIdentityStore(),
-  });
 
-  // 1) Cotação BRL→USDC (rota BR)
+  const ramp = createStellarRamp({ mode: "mock" });
+  const engine = createStellarYield({ mode: "mock" });
+
   const quote = await ramp.quote({
     direction: "onramp",
     country: "BR",
@@ -24,15 +15,21 @@ async function main(): Promise<void> {
   });
   console.log("quote     →", JSON.stringify(quote, null, 2));
 
-  // 2) On-ramp: USDC entregue na carteira do usuário
   const on = await ramp.onramp({ quote, pubkey: "G-ALICE" });
   console.log("onramp    →", on.status, "|", on.id);
 
-  // 3) Status da ordem
-  const st = await ramp.getOrder(on.id);
-  console.log("status    →", st.status);
+  const pos = await engine.autoPark({
+    usdcAmount: quote.usdcAmount,
+    country: "BR",
+  });
+  console.log("autoPark  →", pos.code, "|", pos.tokens, "tokens");
 
-  // 4) Off-ramp: USDC→MXN, com burn solicitado
+  const bal = await engine.balance();
+  console.log("balance   →", JSON.stringify(bal, null, 2));
+
+  const spent = await engine.liquidate({ code: "TESOURO", usdcAmount: "10" });
+  console.log("liquidate →", spent, "USDC");
+
   const qOut = await ramp.quote({
     direction: "offramp",
     country: "MX",

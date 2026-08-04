@@ -1,10 +1,6 @@
 import type { Identity } from "../../domain/entities/identity";
 import type { IdentityStore } from "../../domain/ports/identity-store";
 
-/**
- * In-memory IdentityStore (ADR-005) — for demo/mock. On the server, use
- * SQLite/Redis: the port is the same, only the implementation changes.
- */
 export class InMemoryIdentityStore implements IdentityStore {
   private readonly map = new Map<string, Identity>();
 

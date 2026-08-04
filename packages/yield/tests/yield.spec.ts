@@ -13,9 +13,6 @@ const engine = () =>
 const coerente = (tokens: string, nav: string, fiatValue: string) =>
   Math.abs(Number(tokens) * Number(nav) - Number(fiatValue)) < 0.01;
 
-/**
- * TDD — spec yield.feature (fase green).
- */
 describe("autoPark — alocação por país (ADR-012)", () => {
   it("aloca USDC no stablebond do país (BR→TESOURO)", async () => {
     const pos = await engine().autoPark({ usdcAmount: "100", country: "BR" });

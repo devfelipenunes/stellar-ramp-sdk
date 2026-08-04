@@ -15,7 +15,9 @@
     "build": "tsc -b"
   },
   "devDependencies": {
+    "@stellar/stellar-base": "^15.0.0",
     "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^2.1.9",
     "typescript": "^5.5.0",
     "vitest": "^2.1.0"
   }

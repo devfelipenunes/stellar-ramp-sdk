@@ -1,4 +1,4 @@
-/** Domain error codes — contracted in the Gherkin specs. */
+
 export type RampErrorCode =
   | "no_provider_for_country"
   | "all_providers_failed"

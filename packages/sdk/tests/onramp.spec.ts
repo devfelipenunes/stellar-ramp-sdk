@@ -3,9 +3,6 @@ import { createRamp } from "../src/application/ramp-service";
 import { isSimulatable } from "../src/domain/ports/ramp-provider";
 import { makeIdentityStore, makeProvider, makeOrder } from "./fixtures";
 
-/**
- * TDD — spec onramp.feature. FASE RED: createRamp é stub.
- */
 describe("onramp — fiat → USDC (spec onramp.feature)", () => {
   it("ciclo completo: created → funded → completed", async () => {
     const etherfuse = makeProvider("etherfuse", ["MX"]);
@@ -27,7 +24,6 @@ describe("onramp — fiat → USDC (spec onramp.feature)", () => {
     expect(order.providerId).toBe("etherfuse");
     expect(order.direction).toBe("onramp");
 
-    // Sandbox: depósito simulado via fiat_received; live: provider detecta sozinho.
     if (isSimulatable(etherfuse)) {
       const funded = await etherfuse.simulateFiatDeposit(order.id);
       expect(funded.status).toBe("funded");
@@ -71,11 +67,11 @@ describe("onramp — fiat → USDC (spec onramp.feature)", () => {
     });
 
     await ramp.onramp({ quote, pubkey: "G-USUARIO-1" });
-    await ramp.onramp({ quote, pubkey: "G-USUARIO-1" }); // 2ª ordem
+    await ramp.onramp({ quote, pubkey: "G-USUARIO-1" });
 
     expect(etherfuse.createCustomer).toHaveBeenCalledTimes(1);
     expect(etherfuse.createBankAccount).toHaveBeenCalledTimes(1);
-    expect(store.saveIdentity).toHaveBeenCalledTimes(1); // gravou 1×, reusou nas demais
+    expect(store.saveIdentity).toHaveBeenCalledTimes(1);
   });
 
   it("quote com pubkey garante a organização antes de cotar (ADR-005, fluxo invertido)", async () => {
@@ -95,7 +91,6 @@ describe("onramp — fiat → USDC (spec onramp.feature)", () => {
       pubkey: "G-USUARIO-1",
     });
 
-    // o quote com identidade criou a org (customer) e cotou com o customerId
     expect(etherfuse.createCustomer).toHaveBeenCalledTimes(1);
     expect(etherfuse.quote).toHaveBeenCalledWith(
       expect.objectContaining({ customerId: "etherfuse-cust-1" }),
@@ -139,7 +134,6 @@ describe("onramp — fiat → USDC (spec onramp.feature)", () => {
 
     await ramp.onramp({ quote, pubkey: "G-USUARIO-1" });
 
-    // 1x do quote público (sem pubkey) + 1x fresco no onramp com a org
     expect(etherfuse.quote).toHaveBeenCalledTimes(2);
     expect(etherfuse.quote).toHaveBeenLastCalledWith(
       expect.objectContaining({

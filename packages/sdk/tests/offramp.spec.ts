@@ -3,9 +3,6 @@ import { createRamp } from "../src/application/ramp-service";
 import { err } from "../src/domain/entities/errors";
 import { makeIdentityStore, makeProvider, makeOrder } from "./fixtures";
 
-/**
- * TDD — spec offramp.feature. FASE RED: createRamp é stub.
- */
 describe("offramp — USDC → fiat (spec offramp.feature)", () => {
   it("ciclo completo com burn: created → funded → completed → finalized", async () => {
     const etherfuse = makeProvider("etherfuse", ["MX"]);
@@ -28,7 +25,7 @@ describe("offramp — USDC → fiat (spec offramp.feature)", () => {
     });
 
     expect(order.direction).toBe("offramp");
-    expect(order.burnTransaction?.envelopeXdr).toBeTruthy(); // burn solicitado
+    expect(order.burnTransaction?.envelopeXdr).toBeTruthy();
     expect(order.status).toBe("created");
   });
 
@@ -51,7 +48,6 @@ describe("offramp — USDC → fiat (spec offramp.feature)", () => {
       pubkey: "G-USUARIO-1",
       usdcAsset: "USDC:ISSUER",
     });
-    // burn expirou → regenerar: mesma ordem, novo envelope
     const regenerated = first.burnTransaction
       ? await etherfuse.getOrder(first.id)
       : makeOrder("etherfuse", "offramp", "created");
@@ -66,7 +62,7 @@ describe("offramp — USDC → fiat (spec offramp.feature)", () => {
       providers: [etherfuse],
       identityStore: makeIdentityStore(),
       stellarWallet: {
-        getUsdcBalance: async () => "50", // só tem 50 USDC
+        getUsdcBalance: async () => "50",
       },
     });
     const quote = await ramp.quote({

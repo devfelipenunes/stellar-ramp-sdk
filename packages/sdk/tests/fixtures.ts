@@ -17,11 +17,9 @@ export const TS = "2026-08-03T00:00:00.000Z";
 
 export interface ProviderOpts {
   feeBps?: number;
-  /** Simula provider fora do ar (spec router — failover). */
   failQuote?: boolean;
 }
 
-/** Provider fake que implementa o port RampProvider (ADR-002). */
 export function makeProvider(
   id: string,
   countries: string[],
@@ -89,7 +87,6 @@ export function makeOrder(
   };
 }
 
-/** IdentityStore fake com mapa em memória — injetável nos testes (spec onboarding). */
 export function makeIdentityStore(
   initial: Identity[] = [],
 ): IdentityStore & { map: Map<string, Identity> } {

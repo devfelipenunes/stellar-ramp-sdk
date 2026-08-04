@@ -2,11 +2,6 @@ import { describe, expect, it } from "vitest";
 import { createRamp } from "../src/application/ramp-service";
 import { makeIdentityStore, makeProvider } from "./fixtures";
 
-/**
- * TDD — spec quote.feature + router.feature.
- * FASE RED: createRamp ainda é stub → todas rejeitam not_implemented.
- * Cada teste descreve o contrato que a implementação green deve cumprir.
- */
 describe("quote — roteamento por país (spec quote.feature)", () => {
   it("seleciona o provider que cobre o país do usuário", async () => {
     const koywe = makeProvider("koywe", ["BR"]);
@@ -46,7 +41,7 @@ describe("quote — roteamento por país (spec quote.feature)", () => {
       fiatAmount: "100",
     });
 
-    expect(q.providerId).toBe("manteca"); // feeBps 20 < 50
+    expect(q.providerId).toBe("manteca");
   });
 
   it("país sem cobertura falha com no_provider_for_country sem chamar rede", async () => {

@@ -30,19 +30,19 @@ function decodeJwt(jwt: string) {
 }
 
 describe("createIdvLaunch — hosted /idv verification (Etherfuse)", () => {
-  it("assina um JWT RS256 com sub = orgId, scope idv e claims do usuário", () => {
+  it("assina um JWT RS256 com sub = orgId, scope verification e claims do usuário", () => {
     const { header, payload } = decodeJwt(launch.assertion);
     expect(header).toMatchObject({ alg: "RS256", kid: "demo-key" });
     expect(payload).toMatchObject({
       iss: "https://demo.example.com",
-      sub: "org-123", // sub = organizationId do createCustomer (CRÍTICO)
+      sub: "org-123",
       aud: "https://api.sand.etherfuse.com/auth/token",
-      scope: "idv",
+      scope: "verification",
       email: "ana@example.com",
       name: "Ana Ejemplo",
     });
     expect(payload.jti).toBeTruthy();
-    expect(payload.exp - payload.iat).toBe(300); // short-lived ~5 min
+    expect(payload.exp - payload.iat).toBe(300);
   });
 
   it("a assinatura é verificável com a chave pública", () => {

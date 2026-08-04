@@ -6,57 +6,60 @@ import type { KycData } from "../domain/entities/identity";
 import { lt } from "../domain/lib/decimal";
 import type { Order } from "../domain/entities/order";
 import type { Quote, QuoteRequest } from "../domain/entities/quote";
-import type { RampProvider } from "../domain/ports/ramp-provider";
+import {
+  isEmbeddedWalletProvider,
+  type RampProvider,
+} from "../domain/ports/ramp-provider";
 import { Router } from "./router";
 
 export interface OnrampInput {
   quote: Quote;
-  /** Destination Stellar wallet for the USDC. */
+
   pubkey: string;
-  /**
-   * Bank account details (BRL/PIX...). Required on the first onboarding with
-   * a real provider (ADR-005); mock/demo do not need them.
-   */
+
+  cryptoWalletId?: string;
+
+  walletAddress?: string;
+
   bankAccount?: BankAccountDetails;
 }
 
 export interface OfframpInput {
   quote: Quote;
-  /** Source Stellar wallet for the USDC (burn). */
+
   pubkey: string;
-  usdcAsset: string; // "USDC:ISSUER"
+  usdcAsset: string;
+  cryptoWalletId?: string;
+  walletAddress?: string;
   bankAccount?: BankAccountDetails;
 }
 
-/**
- * Public API of the Track SDK (Ramp):
- *   quote    → picks provider by country, returns a quote (ADR-002)
- *   onramp   → fiat → USDC
- *   offramp  → USDC → fiat
- *   getOrder → status/tracking
- */
 export interface RampService {
   quote(req: QuoteRequest): Promise<Quote>;
   onramp(input: OnrampInput): Promise<Order>;
   offramp(input: OfframpInput): Promise<Order>;
   getOrder(orderId: string): Promise<Order>;
+
+  provisionWallet(providerId: string): Promise<{
+    walletId: string;
+    publicKey: string;
+  }>;
 }
 
-/**
- * SDK factory — GREEN phase. Dependency injection (ADR-001):
- * providers, identityStore, secretProvider and stellarWallet arrive via config;
- * the domain imports no adapter.
- *
- * In "mock" mode (ADR-004) real providers are NOT used: the router and the
- * services operate on a deterministic MockProvider.
- */
 export function createRamp(cfg: RampConfig): RampService {
-  const providers = cfg.mode === "mock" ? [new MockProvider()] : cfg.providers;
+
+  const providers =
+    cfg.mode === "mock"
+      ? [
+          cfg.providers.find((p) => p instanceof MockProvider) ??
+            new MockProvider(),
+        ]
+      : cfg.providers;
   return new RampServiceImpl(cfg, providers, new Router(providers));
 }
 
 class RampServiceImpl implements RampService {
-  /** orderId → providerId, so `getOrder` knows where to look. */
+
   private readonly orderProvider = new Map<string, string>();
 
   constructor(
@@ -66,9 +69,7 @@ class RampServiceImpl implements RampService {
   ) {}
 
   quote(req: QuoteRequest): Promise<Quote> {
-    // With pubkey: ensures the org on each candidate provider (the org is
-    // per-provider — ADR-005) and injects the customerId into the quote.
-    // Without pubkey: direct lookup (mock/demo — real providers require pubkey).
+
     if (!req.pubkey) return this.router.quote(req);
     return this.router.quote(req, async (p, r) => {
       const customerId = await this.ensureOrganization(
@@ -89,8 +90,7 @@ class RampServiceImpl implements RampService {
       input.quote.fiat,
       input.bankAccount,
     );
-    // Real 2-pass flow of the API: the order references a quoteId from a FRESH
-    // quote (the input quote may have expired — ~2min TTL in sandbox).
+
     const fresh = await provider.quote({
       direction: input.quote.direction,
       country: input.quote.country,
@@ -98,11 +98,13 @@ class RampServiceImpl implements RampService {
       fiatAmount: input.quote.fiatAmount,
       usdcAmount: input.quote.usdcAmount,
       pubkey: input.pubkey,
+      walletAddress: input.walletAddress,
       customerId: ident.customerId,
     });
     const order = await provider.createOnrampOrder({
       quote: fresh,
       pubkey: input.pubkey,
+      cryptoWalletId: input.cryptoWalletId,
       customerId: ident.customerId,
       bankAccountId: ident.bankAccountId,
     });
@@ -112,7 +114,7 @@ class RampServiceImpl implements RampService {
 
   async offramp(input: OfframpInput): Promise<Order> {
     const provider = this.providerFor(input.quote.providerId);
-    // Balance guard (offramp spec) — only when the app provides chain access.
+
     if (this.cfg.stellarWallet) {
       const have = await this.cfg.stellarWallet.getUsdcBalance(
         input.pubkey,
@@ -135,11 +137,13 @@ class RampServiceImpl implements RampService {
       fiatAmount: input.quote.fiatAmount,
       usdcAmount: input.quote.usdcAmount,
       pubkey: input.pubkey,
+      walletAddress: input.walletAddress,
       customerId: ident.customerId,
     });
     const order = await provider.createOfframpOrder({
       quote: fresh,
       pubkey: input.pubkey,
+      cryptoWalletId: input.cryptoWalletId,
       customerId: ident.customerId,
       bankAccountId: ident.bankAccountId,
       usdcAsset: input.usdcAsset,
@@ -151,15 +155,28 @@ class RampServiceImpl implements RampService {
   async getOrder(orderId: string): Promise<Order> {
     const known = this.orderProvider.get(orderId);
     if (known) return this.providerFor(known).getOrder(orderId);
-    // Fallback: unknown provider (external order) → try all.
+
     for (const p of this.providers) {
       try {
         return await p.getOrder(orderId);
       } catch {
-        /* try the next one */
+
       }
     }
     throw err.orderNotFound(orderId);
+  }
+
+  async provisionWallet(providerId: string): Promise<{
+    walletId: string;
+    publicKey: string;
+  }> {
+    const provider = this.providerFor(providerId);
+    if (!isEmbeddedWalletProvider(provider)) {
+      throw new Error(
+        `provider ${providerId} does not support embedded wallets (provisionWallet)`,
+      );
+    }
+    return provider.provisionWallet();
   }
 
   private providerFor(providerId: string): RampProvider {
@@ -168,11 +185,6 @@ class RampServiceImpl implements RampService {
     return provider;
   }
 
-  /**
-   * Ensures only the user's ORGANIZATION (customer) — used by the real quote,
-   * which requires the org to exist before quoting. The bank account is left
-   * for onramp. ADR-005: customer created ONCE per (pubkey, provider).
-   */
   private async ensureOrganization(
     provider: RampProvider,
     pubkey: string,
@@ -198,13 +210,6 @@ class RampServiceImpl implements RampService {
     return customerId;
   }
 
-  /**
-   * ADR-005 + ADR-013: customer created ONCE per (pubkey, provider); bank
-   * account created ONCE PER COUNTRY. Reuses the customer + country account
-   * when they exist; if the country is new, creates ONLY the bank account
-   * (same customer). Fake KYC auto-approved in sandbox (playbook §3); RFC
-   * placeholder for MX.
-   */
   private async ensureIdentity(
     provider: RampProvider,
     pubkey: string,
@@ -223,7 +228,7 @@ class RampServiceImpl implements RampService {
           customerId: existing.customerId,
           bankAccountId: account.bankAccountId,
         };
-      // New country: same customer, new bank account (ADR-013).
+
       const { bankAccountId } = await provider.createBankAccount({
         customerId: existing.customerId,
         country,

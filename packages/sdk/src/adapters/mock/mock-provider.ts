@@ -11,23 +11,16 @@ import type {
   RampProvider,
 } from "../../domain/ports/ramp-provider";
 
-/**
- * MockProvider (ADR-004) — a first-class citizen, not an improvised fallback.
- * - Deterministic: same input → same output (mock-mode spec).
- * - REALISTIC rates within the Etherfuse range (0.25%–1.5%).
- * - Same data contract as live (RampProvider).
- * In "mock" mode the router does NOT touch real providers.
- */
 export interface MockRate {
   fiat: string;
-  /** 1 USDC = N fiat. */
+
   usdcPerFiat: string;
   feeBps: number;
 }
 
 const DEFAULT_RATES: MockRate[] = [
-  { fiat: "BRL", usdcPerFiat: "5.50", feeBps: 50 }, // 0.50%
-  { fiat: "MXN", usdcPerFiat: "18.00", feeBps: 25 }, // 0.25% (Etherfuse MXN)
+  { fiat: "BRL", usdcPerFiat: "5.50", feeBps: 50 },
+  { fiat: "MXN", usdcPerFiat: "18.00", feeBps: 25 },
   { fiat: "USD", usdcPerFiat: "1.00", feeBps: 25 },
   { fiat: "ARS", usdcPerFiat: "1200", feeBps: 50 },
 ];
@@ -84,7 +77,7 @@ export class MockProvider implements RampProvider {
       fiatAmount,
       usdcAmount,
       feeBps: rate.feeBps,
-      // fee in the currency of the input leg (quote spec: fiat on onramp, USDC on offramp)
+
       fee: this.fee(
         req.direction === "onramp" ? fiatAmount : usdcAmount,
         rate.feeBps,

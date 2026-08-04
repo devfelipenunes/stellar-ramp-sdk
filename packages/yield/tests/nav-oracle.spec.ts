@@ -10,15 +10,12 @@ const fonte = (id: string, nav: string, fail = false): NavSource => ({
   }),
 });
 
-/**
- * TDD — spec nav-oracle.feature (ADR-010: lição do exploit da Blend fev/2026).
- */
 describe("NAV oracle multi-fonte (ADR-010)", () => {
   it("descarta fonte com NAV anômalo (outlier) e usa a mediana das honestas", async () => {
     const oracle = createNavOracle([
       fonte("a", "1.07127"),
       fonte("b", "1.07130"),
-      fonte("maliciosa", "106.74"), // a anomalia do exploit (USTRY $1,06 → $106,74)
+      fonte("maliciosa", "106.74"),
     ]);
 
     const res = await oracle.getNav("USTRY");

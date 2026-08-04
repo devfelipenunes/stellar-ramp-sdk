@@ -1,14 +1,16 @@
-// @stellar-ramp/sdk — public entry point of the Track SDK (Ramp).
-//
-// SDD/TDD design: domain contracts (entities/ports) emerge from the Gherkin
-// scenarios in /specs; tests in /tests define the contract before the code
-// (red → green phase). ADRs in /docs/adr.
+
 export { createRamp } from "./application/ramp-service";
 export type {
   RampService,
   OnrampInput,
   OfframpInput,
 } from "./application/ramp-service";
+export { createStellarRamp } from "./application/stellar-ramp";
+export type {
+  StellarRampOptions,
+  StellarRampEtherfuseOptions,
+} from "./application/stellar-ramp";
+export { createEnvSecretProvider } from "./adapters/memory/env-secret-provider";
 export { Router } from "./application/router";
 export { MockProvider } from "./adapters/mock/mock-provider";
 export type {

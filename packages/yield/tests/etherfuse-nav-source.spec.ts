@@ -2,9 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEtherfuseNavSource } from "../src/adapters/etherfuse/etherfuse-nav-source";
 import { createNavOracle } from "../src/application/nav-oracle";
 
-/**
- * Fixture com o shape REAL do GET /lookup/stablebonds (confirmado 03/08/2026).
- */
 const LOOKUP_FIXTURE = {
   calculatedAt: "2026-08-03T18:37:09.495Z",
   stablebonds: [

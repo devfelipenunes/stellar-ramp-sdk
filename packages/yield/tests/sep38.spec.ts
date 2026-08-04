@@ -14,9 +14,6 @@ const quote: BondQuote = {
   fiat: "BRL",
 };
 
-/**
- * TDD — SEP-38 para stablebonds ("espaço aberto" da pesquisa).
- */
 describe("SEP-38 quotes para stablebonds", () => {
   it("converte BondQuote para o formato SEP-38", () => {
     const q = toSep38Quote(quote, {
@@ -26,11 +23,10 @@ describe("SEP-38 quotes para stablebonds", () => {
 
     expect(q.sell_asset).toBe(`stellar:USDC:${USDC_ISSUER}`);
     expect(q.buy_asset).toBe(`stellar:TESOURO:${BOND_ISSUER}`);
-    expect(q.sell_amount).toBe("100.0000000"); // 7 casas
+    expect(q.sell_amount).toBe("100.0000000");
     expect(q.buy_amount).toBe("80.4514986");
     expect(q.expires_at).toBeTruthy();
     expect(q.context).toBe("sep38-quote");
-    // price = usdc / tokens
     expect(Math.abs(Number(q.price) - 100 / 80.451498657)).toBeLessThan(0.001);
   });
 

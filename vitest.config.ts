@@ -8,5 +8,9 @@ export default defineConfig({
       "apps/*/tests/**/*.{spec,test}.ts",
     ],
     reporters: ["default"],
+    coverage: {
+      provider: "v8",
+      include: ["packages/*/src/**/*.ts"],
+    },
   },
 });

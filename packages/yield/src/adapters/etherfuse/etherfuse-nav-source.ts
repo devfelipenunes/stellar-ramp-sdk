@@ -2,19 +2,10 @@ import { YieldError } from "../../domain/entities/errors";
 import type { Nav, StablebondCode } from "../../domain/entities/stablebond";
 import type { NavSource } from "../../domain/ports/nav-source";
 
-/**
- * REAL Etherfuse NAV source — `GET /lookup/stablebonds` is PUBLIC
- * (no auth). Shape confirmed on 03/08/2026:
- *
- *   { calculatedAt, stablebonds: [{ symbol, tokenPriceDecimal, bondCurrency, ... }] }
- *
- * ~5min cache (ADR-010). On-chain swaps still sit behind the API key;
- * read-only NAV is open.
- */
 export interface EtherfuseNavSourceOptions {
-  /** Default: production. */
+
   baseUrl?: string;
-  /** Cache TTL in ms (default 5min — ADR-010). */
+
   cacheTtlMs?: number;
 }
 

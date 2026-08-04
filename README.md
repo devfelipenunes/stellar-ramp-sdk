@@ -4,14 +4,15 @@
 
 Desenvolvido por **SDD + TDD**: especificações (Gherkin/ADRs) primeiro, testes que definem o contrato antes do código.
 
-## Status — 03/08/2026
+## Status — 04/08/2026
 
-| Bloco                    | Estado                                                                |
-| ------------------------ | --------------------------------------------------------------------- |
-| **Track SDK (Ramp)**     | ✅ green — 27/27 testes                                               |
-| **Track Yield (Engine)** | ✅ green — 22/22 testes (oracle + SEP-38 + **fonte real de NAV**)     |
-| **Total**                | ✅ **54/54** · typecheck strict limpo                                 |
-| **apps/demo**            | ✅ server + página + **E2E** + oráculo **NAV real** (`/api/nav-live`) |
+| Bloco                    | Estado                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| **Track SDK (Ramp)**     | ✅ green — 33/33 testes (adapter Etherfuse real + **2-pass** + idv-launch)           |
+| **Track Yield (Engine)** | ✅ green — 22/22 testes (oracle + SEP-38 + **fonte real de NAV**)                    |
+| **Total**                | ✅ **75/75** · typecheck strict limpo                                                |
+| **apps/demo**            | ✅ server HTTP + **CLI** (`run.ts`) + **E2E** + oráculo **NAV real**                 |
+| **Sandbox Etherfuse**    | ✅ shapes reais confirmados (org 201, bank-account 201, **quote 200**, order 2-pass) |
 
 ## O que é
 
@@ -59,6 +60,58 @@ const bal = await yield.balance(); // tokens × NAV (rendendo)
 const spent = await yield.liquidate({ code: "TESOURO", usdcAmount: "20" }); // gasto JIT
 ```
 
+## Produção — fluxo completo (KYC via WebSDK /idv)
+
+O SDK cobre toda a parte **programática** (org, dados KYC, conta, quote, order 2-pass).
+O elo final — a **aprovação do KYC do usuário final** — é o **WebSDK `/idv`** da
+Etherfuse (email + selfie + agreements; **não tem API**). O app assina um JWT e
+redireciona o usuário:
+
+```ts
+import {
+  createRamp,
+  InMemoryIdentityStore,
+  createIdvLaunch,
+  buildIdvLaunchHtml, // helper de launch /idv
+} from "@stellar-ramp/sdk";
+
+// 1. onboarding programático (SDK) — cria org + conta
+const ramp = createRamp({
+  mode: "live",
+  providers: [etherfuse],
+  identityStore: store,
+});
+const q = await ramp.quote({
+  direction: "onramp",
+  country: "BR",
+  fiat: "BRL",
+  fiatAmount: "100",
+  pubkey,
+});
+await ramp.onramp({ quote: q, pubkey, bankAccount }); // orgId fica no IdentityStore
+
+// 2. redirecionar o usuário para o /idv (sandbox auto-aprova)
+const launch = createIdvLaunch({
+  orgId, // o organizationId retornado pelo createCustomer (sub do JWT)
+  privateKey, // chave RSA privada do app (RS256)
+  issuer,
+  keyId, // registrados na Etherfuse (1×)
+  email,
+  name,
+  environment: "sandbox", // ou "prod"
+});
+// POST launch.form → launch.action  (ou use buildIdvLaunchHtml(launch))
+```
+
+- **Pré-requisito 1×**: registrar `iss` + JWKS pública com a Etherfuse; org dona
+  da key com KYB aprovado (dashboard).
+- **Webhook** `kyc_updated` com `status:"approved"` → a conta bancária nasce
+  `compliant:true` → **a ordem fecha**.
+- **Sandbox**: auto-aprova (qualquer documento/selfie passa; México exige a
+  constancia). Referência: `docs.etherfuse.com/guides/kyc-websdk`.
+- Detalhe: o antigo `POST /ramp/onboarding-url` é **deprecated** — o caminho é
+  `/auth/launch` com JWT (o helper acima cobre).
+
 ## Estrutura
 
 ```
@@ -80,19 +133,19 @@ examples/basic.ts         # SDK puro em 4 linhas
 ## Comandos
 
 ```bash
-npm install
-npm test                  # 54/54 (SDK + Yield + E2E demo)
-npm run typecheck         # tsc strict (src + testes de ambos os packages)
-bun examples/basic.ts     # exemplo SDK (mock)
-bun apps/demo/server.ts   # demo completo
+pnpm install
+pnpm test                 # 75/75 (SDK + Yield + E2E demo)
+pnpm typecheck            # tsc strict (src + testes de ambos os packages)
+bun apps/demo/run.ts      # demo CLI (fluxo completo, mock)
+bun apps/demo/server.ts   # demo HTTP em http://localhost:8787
 ```
 
 ## Pendências (externas / próximos)
 
-- [ ] **API key sandbox** → `GET /ramp/assets` confirma shapes do adapter Etherfuse (transporte já pronto)
+- [ ] **App**: integrar o **WebSDK `/idv`** (helper `createIdvLaunch` pronto no SDK) — o elo que faz a conta ficar `compliant` e a ordem fechar na sandbox real
+- [ ] **Registrar `iss` + JWKS** com a Etherfuse (pré-requisito do launch JWT, 1×)
 - [ ] Adapters **Koywe/Manteca** (PIX live BR) — requerem credenciais
-- [ ] Adapter **Etherfuse do Yield** (NAV real + swap) — após shapes
-- [ ] Stretch: **SEP-38** para stablebonds + oráculo NAV multi-fonte (ADR-010)
+- [ ] Validar variante **offramp** do quote/order na sandbox (shape aproximado hoje)
 
 ## Decisões de design (resumo)
 

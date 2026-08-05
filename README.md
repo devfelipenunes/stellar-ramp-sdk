@@ -177,6 +177,9 @@ const order = await ramp.onramp({
 
 ```
 docs/adr/                 # 12 ADRs (001–008 SDK · 009–012 Yield)
+docs/developer-guide.md   # Guia do dev: quickstart, API, fluxos
+docs/production.md        # Produção: KYC /idv, embedded wallet, JWKS, sandbox
+AGENTS.md                 # Spec de onboarding para IA (arquitetura, gotchas, status)
 specs/features/           # 9 features Gherkin (pt)
 packages/sdk/             # Track Ramp: router, RampService, adapters mock|etherfuse|memory
 packages/yield/           # Track Yield: YieldEngine, MockStablebondProvider,
@@ -184,6 +187,12 @@ packages/yield/           # Track Yield: YieldEngine, MockStablebondProvider,
 apps/demo/                # server HTTP + dashboard + teste E2E
 examples/basic.ts         # SDK puro em 4 linhas
 ```
+
+## Documentação
+
+- **Dev**: `docs/developer-guide.md` (quickstart, API reference, fluxos)
+- **Produção**: `docs/production.md` (KYC `/idv`, embedded wallet, JWKS, sandbox)
+- **IA**: `AGENTS.md` (onboarding completo para agentes — arquitetura, contratos, gotchas)
 
 ## Extra: segurança e interoperabilidade
 

@@ -1,4 +1,3 @@
-
 export { createRamp } from "./application/ramp-service";
 export type {
   RampService,
@@ -26,4 +25,7 @@ export {
   type IdvLaunchOptions,
 } from "./adapters/etherfuse/idv-launch";
 export { InMemoryIdentityStore } from "./adapters/memory/in-memory-identity-store";
+export { SqliteIdentityStore } from "./adapters/storage/sqlite-identity-store";
+export { createLiveStellarWallet } from "./adapters/stellar/live-stellar-wallet";
+export type { LiveStellarWalletOptions } from "./adapters/stellar/live-stellar-wallet";
 export * from "./domain";

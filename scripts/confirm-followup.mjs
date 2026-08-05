@@ -199,4 +199,36 @@ if (quoteId && bankAccountId && walletId) {
   console.log("  (sem quoteId/bankAccountId/walletId — pula a ordem)");
 }
 
+if (process.env.OFFRAMP) {
+  const off = await req("20_quote_offramp", "/ramp/quote", {
+    method: "POST",
+    body: JSON.stringify({
+      quoteId: randomUUID(),
+      customerId: ORG,
+      blockchain: "stellar",
+      walletAddress: walletPub,
+      sourceAmount: "10",
+      quoteAssets: {
+        type: "offramp",
+        sourceAsset: "USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+        targetAsset: "BRL",
+      },
+    }),
+  });
+  if (off.json?.quoteId) {
+    const order = await req("21_order_offramp", "/ramp/order", {
+      method: "POST",
+      body: JSON.stringify({
+        orderId: randomUUID(),
+        quoteId: off.json.quoteId,
+        customerId: ORG,
+        bankAccountId,
+        blockchain: "stellar",
+        cryptoWalletId: walletId,
+      }),
+    });
+    console.log("  offramp order:", order.status);
+  }
+}
+
 console.log("\n✅ follow-up done — conta PIX + quote BRL + ordem (ver raws em /tmp/ef-confirm/)");

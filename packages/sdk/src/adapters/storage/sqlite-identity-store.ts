@@ -3,13 +3,14 @@ import type { Identity } from "../../domain/entities/identity";
 import type { IdentityStore } from "../../domain/ports/identity-store";
 
 const require = createRequire(import.meta.url);
-const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
-type Db = InstanceType<typeof DatabaseSync>;
+type Db = InstanceType<typeof import("node:sqlite").DatabaseSync>;
 
 export class SqliteIdentityStore implements IdentityStore {
   private readonly db: Db;
 
   constructor(filename = ":memory:") {
+    const { DatabaseSync } =
+      require("node:sqlite") as typeof import("node:sqlite");
     this.db = new DatabaseSync(filename);
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS identities (

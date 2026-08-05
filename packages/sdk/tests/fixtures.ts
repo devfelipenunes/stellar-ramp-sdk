@@ -11,6 +11,7 @@ import type {
   OfframpOrderRequest,
   OnrampOrderRequest,
   RampProvider,
+  SignedApproval,
 } from "../src/domain/ports/ramp-provider";
 
 export const TS = "2026-08-03T00:00:00.000Z";
@@ -37,7 +38,8 @@ export function makeProvider(
         country: req.country,
         fiat: req.fiat,
         fiatAmount: req.fiatAmount ?? "0",
-        usdcAmount: req.usdcAmount ?? "0",
+        cryptoAmount: req.cryptoAmount ?? "0",
+        cryptoAsset: req.cryptoAsset ?? "USDC:ISSUER",
         feeBps: opts.feeBps ?? 25,
         fee: "1.00",
         createdAt: TS,
@@ -48,17 +50,15 @@ export function makeProvider(
     ),
     createOfframpOrder: vi.fn(
       async (_req: OfframpOrderRequest): Promise<Order> =>
-        makeOrder(id, "offramp", "created", {
-          burnTransaction: {
-            envelopeXdr: `AAAA-burn-${id}`,
-            expiresAt: TS,
-            orderId: `${id}-order-1`,
-          },
-        }),
+        makeOrder(id, "offramp", "created"),
     ),
-    getOrder: vi.fn(async (orderId: string): Promise<Order> =>
+    getOrder: vi.fn(async (_orderId: string): Promise<Order> =>
       makeOrder(id, "onramp", "completed"),
     ),
+    submitApproval: vi.fn(async (_orderId: string, signed: SignedApproval) => ({
+      approvalMessageId: signed.approvalMessageId,
+      completed: true,
+    })),
     createCustomer: vi.fn(async (_p: { pubkey: string; kyc: KycData }) => ({
       customerId: `${id}-cust-1`,
     })),
@@ -79,12 +79,31 @@ export function makeOrder(
     country: "MX",
     fiat: "MXN",
     fiatAmount: "300",
-    usdcAmount: "35.00",
+    cryptoAmount: "35.00",
+    cryptoAsset: "USDC:ISSUER",
     status,
     createdAt: TS,
     updatedAt: TS,
     ...overrides,
   };
+}
+
+export function makeApprovalOrder(
+  providerId: string,
+  direction: OrderDirection,
+  overrides: Partial<Order> = {},
+): Order {
+  return makeOrder(providerId, direction, "funded", {
+    approval: {
+      approvalMessageId: `${providerId}-approval-1`,
+      approvalMessage: JSON.stringify({
+        type: "ACTIVITY_TYPE_APPROVE_ACTIVITY",
+        timestampMs: TS,
+      }),
+      summary: "Claim 35.00 USDC",
+    },
+    ...overrides,
+  });
 }
 
 export function makeIdentityStore(

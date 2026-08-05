@@ -24,7 +24,7 @@ describe("createLiveStellarWallet", () => {
     });
 
     const wallet = createLiveStellarWallet({ horizonUrl: "https://h" });
-    const bal = await wallet.getUsdcBalance("G-USER", "USDC:GISS");
+    const bal = await wallet.getBalance("G-USER", "USDC:GISS");
 
     expect(bal).toBe("18.09090909");
     expect(fetchMock).toHaveBeenCalledWith("https://h/accounts/G-USER");
@@ -38,13 +38,13 @@ describe("createLiveStellarWallet", () => {
       status: 200,
       json: async () => ({ balances: [{ asset_code: "XLM" }] }),
     });
-    expect(await wallet.getUsdcBalance("G-USER", "USDC:GISS")).toBe("0");
+    expect(await wallet.getBalance("G-USER", "USDC:GISS")).toBe("0");
 
     fetchMock.mockResolvedValueOnce({
       ok: false,
       status: 404,
       json: async () => ({}),
     });
-    expect(await wallet.getUsdcBalance("G-MISSING", "USDC:GISS")).toBe("0");
+    expect(await wallet.getBalance("G-MISSING", "USDC:GISS")).toBe("0");
   });
 });

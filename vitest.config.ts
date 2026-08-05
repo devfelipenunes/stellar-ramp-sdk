@@ -3,10 +3,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     globals: true,
-    include: [
-      "packages/*/tests/**/*.{spec,test}.ts",
-      "apps/*/tests/**/*.{spec,test}.ts",
-    ],
+    include: ["packages/*/tests/**/*.{spec,test}.ts"],
     reporters: ["default"],
     coverage: {
       provider: "v8",
@@ -19,9 +16,6 @@ export default defineConfig({
         "**/domain/entities/identity.ts",
         "**/domain/entities/order.ts",
         "**/domain/entities/quote.ts",
-        "**/domain/entities/position.ts",
-        "**/domain/entities/sep38.ts",
-        "**/domain/entities/stablebond.ts",
       ],
       thresholds: {
         lines: 90,

@@ -46,7 +46,7 @@ describe("mock mode — demo determinística (spec mock-mode.feature)", () => {
       fiatAmount: "500",
     });
 
-    expect(a.usdcAmount).toBe(b.usdcAmount);
+    expect(a.cryptoAmount).toBe(b.cryptoAmount);
     expect(a.fee).toBe(b.fee);
   });
 
@@ -61,12 +61,11 @@ describe("mock mode — demo determinística (spec mock-mode.feature)", () => {
       direction: "offramp",
       country: "MX",
       fiat: "MXN",
-      usdcAmount: "200",
+      cryptoAmount: "200",
     });
     const order = await ramp.offramp({
       quote,
       pubkey: "G-USUARIO-1",
-      usdcAsset: "USDC:ISSUER",
     });
 
     expect(order.direction).toBe("offramp");

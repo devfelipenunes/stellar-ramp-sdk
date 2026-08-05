@@ -11,7 +11,9 @@ export interface QuoteRequest {
 
   fiatAmount?: Amount;
 
-  usdcAmount?: Amount;
+  cryptoAmount?: Amount;
+
+  cryptoAsset?: string;
 
   pubkey?: string;
 
@@ -30,7 +32,9 @@ export interface Quote {
 
   fiatAmount: Amount;
 
-  usdcAmount: Amount;
+  cryptoAmount: Amount;
+
+  cryptoAsset: string;
 
   feeBps: number;
 

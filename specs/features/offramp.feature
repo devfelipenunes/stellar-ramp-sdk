@@ -1,31 +1,31 @@
 # language: pt
-Funcionalidade: Off-ramp (USDC → fiat)
+Funcionalidade: Off-ramp (cripto/stablebond → fiat, embedded wallet)
 
-  Como um usuário do app
-  Eu quero trocar USDC por moeda local na minha conta bancária
+  Como uma aplicação que integra o SDK
+  Eu quero trocar um ativo (TESOURO, USDC, ...) por moeda local
   Para sair de on-chain quando quiser gastar
 
   Contexto:
-    Dado que o usuário tem identidade e conta bancária cadastradas no provider
-    E que o usuário possui saldo USDC suficiente
+    Dado que o customer tem identidade e conta bancária cadastradas no provider
+    E que a embedded wallet possui saldo suficiente do ativo de origem
 
-  Cenário: Off-ramp completo USDC→MXN via Etherfuse
-    Quando solicito off-ramp de "USDC 200" → MXN
+  Cenário: Off-ramp completo TESOURO→BRL via Etherfuse
+    Quando solicito off-ramp de "TESOURO 8.62" → BRL
     Então o SDK cria a ordem no provider com status "created"
-    E o provider solicita o burn dos USDC (burnTransaction)
-    E o burn é confirmado na chain (1–2 min, regenerável)
-    E a ordem evolui para "funded" → "completed" → "finalized"
+    E o provider constrói a transação de queima (burn) do ativo internamente
+    E a ordem evolui para "funded", com uma aprovação pendente (`approval`)
+    E ao assinar e submeter essa aprovação com a chave P-256 da wallet a ordem evolui para "completed"
     E o app é notificado do payout fiat finalizado
 
-  Cenário: Burn transaction pode ser regenerado
-    Dado que o burnTransaction expirou antes da assinatura
-    Quando solicito o burn novamente
-    Então o provider retorna um novo burnTransaction válido
-    E a ordem continua a mesma (sem duplicar)
+  Cenário: Aprovação de offramp usa o mesmo mecanismo do onramp
+    Dado que a ordem de offramp tem status "funded" e um campo `approval`
+    Quando assino o `approvalMessage` com a chave P-256 da wallet
+    E submeto a aprovação assinada
+    Então o provider autoriza o burn e a ordem completa
 
   Cenário: Off-ramp com saldo insuficiente falha antes de criar ordem
-    Dado que o usuário tem "USDC 50" na carteira
-    Quando solicito off-ramp de "USDC 200" → MXN
+    Dado que a wallet tem "TESOURO 5" disponível
+    Quando solicito off-ramp de "TESOURO 20" → BRL
     Então o SDK falha com erro de domínio `insufficient_balance`
     E nenhuma ordem é criada no provider
 
@@ -36,6 +36,6 @@ Funcionalidade: Off-ramp (USDC → fiat)
 
   Cenário: Em modo mock, off-ramp finaliza sem tocar a chain
     Dado que o SDK roda com `createRamp({ mode: "mock" })`
-    Quando solicito off-ramp de "USDC 200" → MXN
+    Quando solicito off-ramp de "TESOURO 200" → BRL
     Então a ordem mock finaliza determinísticamente (taxas realistas)
     E o payout simulado aparece na consulta

@@ -13,14 +13,15 @@ describe("entities — shapes (SDD contracts)", () => {
       country: "MX",
       fiat: "MXN",
       fiatAmount: "1000",
-      usdcAmount: "118.20",
+      cryptoAmount: "118.20",
+      cryptoAsset: "USDC:ISSUER",
       feeBps: 25,
       fee: "0.25",
       createdAt: "2026-08-03T00:00:00.000Z",
     };
     expect(quote.providerId).toBe("etherfuse");
     expect(quote.feeBps).toBeGreaterThanOrEqual(0);
-    expect(Number(quote.usdcAmount)).toBeGreaterThan(0);
+    expect(Number(quote.cryptoAmount)).toBeGreaterThan(0);
   });
 
   it("RampError carrega code + details para diagnóstico (spec router)", () => {

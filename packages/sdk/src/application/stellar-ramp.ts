@@ -23,7 +23,7 @@ export interface StellarRampEtherfuseOptions {
   environment: "sandbox" | "prod";
   countries?: CountryCode[];
   accountType?: "personal" | "business";
-  usdcAsset?: string;
+  defaultCryptoAsset?: string;
   blockchain?: string;
   customerEmail?: string;
 
@@ -75,7 +75,9 @@ export function createStellarRamp(opts: StellarRampOptions): RampService {
         secrets,
         keyName: e.apiKeyEnv ?? "ETHERFUSE_API_KEY",
         ...(e.accountType ? { accountType: e.accountType } : {}),
-        ...(e.usdcAsset ? { usdcAsset: e.usdcAsset } : {}),
+        ...(e.defaultCryptoAsset
+          ? { defaultCryptoAsset: e.defaultCryptoAsset }
+          : {}),
         ...(e.blockchain ? { blockchain: e.blockchain } : {}),
         ...(e.customerEmail ? { customerEmail: e.customerEmail } : {}),
       }),

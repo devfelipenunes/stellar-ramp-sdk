@@ -7,6 +7,8 @@ import {
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", {
   modulusLength: 2048,
+  privateKeyEncoding: { type: "pkcs1", format: "pem" },
+  publicKeyEncoding: { type: "spki", format: "pem" },
 });
 
 const launch = createIdvLaunch({
@@ -20,7 +22,7 @@ const launch = createIdvLaunch({
 });
 
 function decodeJwt(jwt: string) {
-  const [h, p, s] = jwt.split(".");
+  const [h = "", p = "", s = ""] = jwt.split(".");
   return {
     header: JSON.parse(Buffer.from(h, "base64url").toString()),
     payload: JSON.parse(Buffer.from(p, "base64url").toString()),

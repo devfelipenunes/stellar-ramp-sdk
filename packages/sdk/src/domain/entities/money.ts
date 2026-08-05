@@ -1,6 +1,6 @@
 
 export type FiatCode = "BRL" | "MXN" | "USD" | "ARS" | (string & {});
-export type CryptoCode = "USDC";
+export type CryptoCode = "USDC" | "TESOURO" | "CETES" | "USTRY" | (string & {});
 export type AssetCode = FiatCode | CryptoCode;
 export type Amount = string;
 

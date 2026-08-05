@@ -11,6 +11,7 @@ export type RampErrorCode =
   | "bank_account_response_unrecognized"
   | "order_not_found"
   | "unsupported_fiat"
+  | "approval_timeout"
   | "not_implemented";
 
 export class RampError extends Error {
@@ -96,6 +97,12 @@ export const err = {
     new RampError("order_not_found", `Order not found: ${orderId}`, {
       orderId,
     }),
+  approvalTimeout: (orderId: string, waitedMs: number) =>
+    new RampError(
+      "approval_timeout",
+      `No approval appeared for order ${orderId} after ${waitedMs}ms`,
+      { orderId, waitedMs },
+    ),
   notImplemented: (feature: string) =>
     new RampError(
       "not_implemented",

@@ -1,7 +1,7 @@
 import type { BankAccountDetails } from "../entities/bank-account";
 import type { CountryCode } from "../entities/country";
 import type { KycData } from "../entities/identity";
-import type { Amount, FiatCode } from "../entities/money";
+import type { FiatCode } from "../entities/money";
 import type { Order } from "../entities/order";
 import type { Quote, QuoteRequest } from "../entities/quote";
 
@@ -16,6 +16,11 @@ export interface RampProvider {
   createOfframpOrder(req: OfframpOrderRequest): Promise<Order>;
   getOrder(orderId: string): Promise<Order>;
 
+  submitApproval(
+    orderId: string,
+    signed: SignedApproval,
+  ): Promise<{ approvalMessageId: string; completed: boolean }>;
+
   createCustomer(params: {
     pubkey: string;
     kyc: KycData;
@@ -27,6 +32,12 @@ export interface RampProvider {
 
     details?: BankAccountDetails;
   }): Promise<{ bankAccountId: string }>;
+}
+
+export interface SignedApproval {
+  approvalMessageId: string;
+  approvalMessage: string;
+  signature: string;
 }
 
 export interface OnrampOrderRequest {
@@ -46,7 +57,6 @@ export interface OfframpOrderRequest {
   customerId: string;
   bankAccountId: string;
 
-  usdcAsset: string;
   cryptoWalletId?: string;
 }
 
@@ -64,7 +74,9 @@ export function isSimulatable(
 }
 
 export interface EmbeddedWalletProvider extends RampProvider {
-  provisionWallet(): Promise<{ walletId: string; publicKey: string }>;
+  provisionWallet(
+    signerPublicKeyPem: string,
+  ): Promise<{ walletId: string; publicKey: string }>;
 }
 
 export function isEmbeddedWalletProvider(

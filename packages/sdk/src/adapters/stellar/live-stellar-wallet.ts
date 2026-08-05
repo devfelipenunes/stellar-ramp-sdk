@@ -11,8 +11,8 @@ export function createLiveStellarWallet(
   const horizon = opts.horizonUrl ?? "https://horizon-testnet.stellar.org";
 
   return {
-    async getUsdcBalance(pubkey, usdcAsset): Promise<Amount> {
-      const [code, issuer] = usdcAsset.split(":");
+    async getBalance(pubkey, assetCode): Promise<Amount> {
+      const [code, issuer] = assetCode.split(":");
       const res = await fetch(`${horizon}/accounts/${pubkey}`);
       if (res.status === 404) return "0";
       if (!res.ok) throw new Error(`horizon ${res.status}`);

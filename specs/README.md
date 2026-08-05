@@ -1,32 +1,27 @@
-# Specs — SDK (Ramp) + Yield (Engine)
+# Specs — SDK (Ramp, embedded wallet)
 
-Camada **SDD** de comportamento: Gherkin BDD no idioma do consumidor (`# language: pt`). Cada cenário alimenta um teste TDD (Vitest) em `packages/*/tests`.
+Camada **SDD** de comportamento: Gherkin BDD no idioma do consumidor (`# language: pt`). Cada cenário alimenta um teste TDD (Vitest) em `packages/sdk/tests`.
 
 ## Features
 
-| Feature              | Cobre                                 | Especifica                                                                |
-| -------------------- | ------------------------------------- | ------------------------------------------------------------------------- |
-| `quote.feature`      | Cotação fiat↔USDC                     | Seleção por país, coerência de montantes, cap sandbox                     |
-| `router.feature`     | Roteamento multi-anchor               | Escolha por custo, failover, erro `no_provider_for_country`               |
-| `onramp.feature`     | fiat → USDC                           | Ciclo `created→funded→completed`, identidade reusada, webhook             |
-| `offramp.feature`    | USDC → fiat                           | Burn, payout, `burnTransaction` regenerável, saldo insuficiente           |
-| `onboarding.feature` | customer/bank/KYC                     | 1× por usuário, IdentityStore injetável, RFC placeholder                  |
-| `mock-mode.feature`  | Demo offline                          | Determinístico, taxas realistas, mesmo shape do live                      |
-| `yield.feature`      | Track Yield (autoPark/NAV/liquidação) | Alocação por país, NAV por token, liquidate JIT, mock determinístico      |
-| `nav-oracle.feature` | Oráculo multi-fonte                   | Mediana robusta, outlier >5%, fonte fora do ar, `no_nav_source_available` |
-| `sep38.feature`      | Quotes SEP-38 p/ stablebonds          | Formato SEP-38, 7 casas decimais, validação do par                        |
+| Feature              | Cobre                             | Especifica                                                                |
+| --------------------- | ---------------------------------- | ------------------------------------------------------------------------- |
+| `quote.feature`       | Cotação fiat↔cripto                | Seleção por país, coerência de montantes, cap sandbox                     |
+| `router.feature`      | Roteamento multi-anchor            | Escolha por custo, failover, erro `no_provider_for_country`               |
+| `onramp.feature`      | fiat → cripto (embedded wallet)    | Ciclo `created→funded(approval)→completed`, aprovação P-256, timeout      |
+| `offramp.feature`     | cripto → fiat (embedded wallet)    | Mesmo mecanismo de aprovação, burn, saldo insuficiente                    |
+| `onboarding.feature`  | customer/bank                      | 1× por usuário, IdentityStore injetável                                   |
+| `mock-mode.feature`   | Demo offline                       | Determinístico, taxas realistas, mesmo shape do live                      |
 
 ## Mapa ADR ↔ Spec
 
 - ADR-002 (`RampProvider` port) → `quote`, `router`
-- ADR-003 (USDC contrato entre tracks) → todas (USDC como entrada/saída)
 - ADR-004 (mock mode) → `mock-mode`
 - ADR-005 (identidades reusadas) → `onboarding`, `onramp`
-- ADR-006 (pathfinding) → swaps internos (ver `offramp` burn)
-- ADR-007 (keys server-side) → cross-cutting (fora das features, guarda de `createRamp`)
-- ADR-009 (`StablebondProvider` port) → `yield`
-- ADR-010 (yield por NAV, não rebase) → `yield` (balance)
-- ADR-011 (liquidação JIT) → `yield` (liquidate)
-- ADR-012 (alocação por país + mock determinístico) → `yield` (autoPark)
-- ADR-010 (oráculo NAV multi-fonte, lição Blend) → `nav-oracle`
-- SEP-38 (interoperabilidade) → `sep38`
+- ADR-007 (keys server-side) → cross-cutting (guarda de `createRamp`)
+- ADR-013 (contas bancárias por país) → `onboarding`, `onramp`, `offramp`
+- ADR-015 (embedded wallet + aprovação P-256, ativo genérico) → `onramp`, `offramp` (substitui ADR-003/009/010/011/014)
+
+Specs do antigo pacote `@stellar-ramp/yield` (`yield.feature`, `nav-oracle.feature`,
+`sep38.feature`, `etherfuse-stablebond.feature`, `position-lock.feature`) foram removidas
+junto com o pacote — ver ADR-015 e `plan-refactor.md`.

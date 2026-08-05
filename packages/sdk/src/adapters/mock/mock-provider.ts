@@ -1,29 +1,34 @@
 import type { BankAccountDetails } from "../../domain/entities/bank-account";
 import type { CountryCode } from "../../domain/entities/country";
-import { RampError } from "../../domain/entities/errors";
+import { RampError, err } from "../../domain/entities/errors";
 import type { KycData } from "../../domain/entities/identity";
 import { div, mul, sub } from "../../domain/lib/decimal";
 import type { Order } from "../../domain/entities/order";
 import type { Quote, QuoteRequest } from "../../domain/entities/quote";
 import type {
+  EmbeddedWalletProvider,
   OfframpOrderRequest,
   OnrampOrderRequest,
   RampProvider,
+  SignedApproval,
+  SimulatableProvider,
 } from "../../domain/ports/ramp-provider";
 
 export interface MockRate {
   fiat: string;
 
-  usdcPerFiat: string;
+  cryptoPerFiat: string;
   feeBps: number;
 }
 
 const DEFAULT_RATES: MockRate[] = [
-  { fiat: "BRL", usdcPerFiat: "5.50", feeBps: 50 },
-  { fiat: "MXN", usdcPerFiat: "18.00", feeBps: 25 },
-  { fiat: "USD", usdcPerFiat: "1.00", feeBps: 25 },
-  { fiat: "ARS", usdcPerFiat: "1200", feeBps: 50 },
+  { fiat: "BRL", cryptoPerFiat: "5.50", feeBps: 50 },
+  { fiat: "MXN", cryptoPerFiat: "18.00", feeBps: 25 },
+  { fiat: "USD", cryptoPerFiat: "1.00", feeBps: 25 },
+  { fiat: "ARS", cryptoPerFiat: "1200", feeBps: 50 },
 ];
+
+const DEFAULT_MOCK_ASSET = "USDC:MOCK-ISSUER";
 
 export interface MockProviderOptions {
   id?: string;
@@ -31,10 +36,13 @@ export interface MockProviderOptions {
   rates?: MockRate[];
 }
 
-export class MockProvider implements RampProvider {
+export class MockProvider
+  implements RampProvider, SimulatableProvider, EmbeddedWalletProvider
+{
   readonly id: string;
   readonly countries: CountryCode[];
   private readonly rates: Map<string, MockRate>;
+  private readonly orders = new Map<string, Order>();
   private seq = 0;
 
   constructor(opts: MockProviderOptions = {}) {
@@ -57,16 +65,17 @@ export class MockProvider implements RampProvider {
 
   async quote(req: QuoteRequest): Promise<Quote> {
     const rate = this.rateFor(req.fiat);
+    const cryptoAsset = req.cryptoAsset ?? DEFAULT_MOCK_ASSET;
     let fiatAmount: string;
-    let usdcAmount: string;
+    let cryptoAmount: string;
     if (req.direction === "onramp") {
       fiatAmount = req.fiatAmount ?? "0";
       const fee = this.fee(fiatAmount, rate.feeBps);
-      usdcAmount = div(sub(fiatAmount, fee), rate.usdcPerFiat);
+      cryptoAmount = div(sub(fiatAmount, fee), rate.cryptoPerFiat);
     } else {
-      usdcAmount = req.usdcAmount ?? "0";
-      const fee = this.fee(usdcAmount, rate.feeBps);
-      fiatAmount = mul(sub(usdcAmount, fee), rate.usdcPerFiat);
+      cryptoAmount = req.cryptoAmount ?? "0";
+      const fee = this.fee(cryptoAmount, rate.feeBps);
+      fiatAmount = mul(sub(cryptoAmount, fee), rate.cryptoPerFiat);
     }
     return {
       quoteId: `${this.id}-quote-${this.seq++}`,
@@ -75,11 +84,12 @@ export class MockProvider implements RampProvider {
       country: req.country,
       fiat: req.fiat,
       fiatAmount,
-      usdcAmount,
+      cryptoAmount,
+      cryptoAsset,
       feeBps: rate.feeBps,
 
       fee: this.fee(
-        req.direction === "onramp" ? fiatAmount : usdcAmount,
+        req.direction === "onramp" ? fiatAmount : cryptoAmount,
         rate.feeBps,
       ),
       createdAt: now(),
@@ -87,33 +97,58 @@ export class MockProvider implements RampProvider {
   }
 
   async createOnrampOrder(req: OnrampOrderRequest): Promise<Order> {
-    return this.order(req.quote, "onramp", "created");
+    const order = this.order(req.quote, "onramp", "created");
+    this.orders.set(order.id, order);
+    return order;
   }
 
   async createOfframpOrder(req: OfframpOrderRequest): Promise<Order> {
-    const id = this.nextId();
-    return this.order(req.quote, "offramp", "created", {
-      id,
-      burnTransaction: {
-        envelopeXdr: `AAAA-mock-burn-${id}`,
-        expiresAt: now(),
-        orderId: id,
-      },
-    });
+    const order = this.order(req.quote, "offramp", "created");
+    this.orders.set(order.id, order);
+    return order;
   }
 
   async getOrder(orderId: string): Promise<Order> {
-    return {
-      id: orderId,
-      providerId: this.id,
-      direction: "onramp",
-      country: "MX",
-      fiat: "MXN",
-      fiatAmount: "0",
-      usdcAmount: "0",
-      status: "completed",
-      createdAt: now(),
+    const order = this.orders.get(orderId);
+    if (!order) throw err.orderNotFound(orderId);
+    return order;
+  }
+
+  async simulateFiatDeposit(orderId: string): Promise<Order> {
+    const order = await this.getOrder(orderId);
+    const updated: Order = {
+      ...order,
+      status: "funded",
       updatedAt: now(),
+      approval: {
+        approvalMessageId: `${this.id}-approval-${this.seq++}`,
+        approvalMessage: JSON.stringify({
+          type: "ACTIVITY_TYPE_APPROVE_ACTIVITY",
+          timestampMs: String(Date.now()),
+        }),
+        summary: `Claim ${order.cryptoAmount} ${order.cryptoAsset.split(":")[0]}`,
+      },
+      stellarClaimableBalanceId: `${this.id}-claimable-${orderId}`,
+    };
+    this.orders.set(orderId, updated);
+    return updated;
+  }
+
+  async submitApproval(
+    orderId: string,
+    signed: SignedApproval,
+  ): Promise<{ approvalMessageId: string; completed: boolean }> {
+    const order = await this.getOrder(orderId);
+    this.orders.set(orderId, { ...order, status: "completed", updatedAt: now() });
+    return { approvalMessageId: signed.approvalMessageId, completed: true };
+  }
+
+  async provisionWallet(
+    _signerPublicKeyPem: string,
+  ): Promise<{ walletId: string; publicKey: string }> {
+    return {
+      walletId: `${this.id}-wallet-${this.seq++}`,
+      publicKey: `G-MOCK-${this.id.toUpperCase()}`,
     };
   }
 
@@ -160,7 +195,8 @@ export class MockProvider implements RampProvider {
       country: quote.country,
       fiat: quote.fiat,
       fiatAmount: quote.fiatAmount,
-      usdcAmount: quote.usdcAmount,
+      cryptoAmount: quote.cryptoAmount,
+      cryptoAsset: quote.cryptoAsset,
       status,
       createdAt: now(),
       updatedAt: now(),

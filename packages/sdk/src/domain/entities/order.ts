@@ -6,10 +6,12 @@ export type OrderDirection = "onramp" | "offramp";
 export type OrderStatus =
   "created" | "funded" | "completed" | "finalized" | "expired" | "cancelled";
 
-export interface BurnTransaction {
-  envelopeXdr: string;
-  expiresAt: string;
-  orderId: string;
+export interface EmbeddedWalletApproval {
+  approvalMessageId: string;
+
+  approvalMessage: string;
+
+  summary: string;
 }
 
 export interface Order {
@@ -20,12 +22,18 @@ export interface Order {
   country: CountryCode;
   fiat: FiatCode;
   fiatAmount: Amount;
-  usdcAmount: Amount;
+
+  cryptoAmount: Amount;
+
+  cryptoAsset: string;
+
   status: OrderStatus;
   createdAt: string;
   updatedAt: string;
 
   statusPageUrl?: string;
 
-  burnTransaction?: BurnTransaction;
+  approval?: EmbeddedWalletApproval;
+
+  stellarClaimableBalanceId?: string;
 }

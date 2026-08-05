@@ -2,7 +2,7 @@
 
 |            |             |
 | ---------- | ----------- |
-| **Status** | Aceita      |
+| **Status** | Superseded por ADR-015 |
 | **Data**   | 2026-08-03  |
 | **Tipo**   | Arquitetura |
 

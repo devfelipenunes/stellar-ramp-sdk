@@ -1,4 +1,5 @@
 import { MockProvider } from "../adapters/mock/mock-provider";
+import type { EmbeddedWalletSigner } from "../adapters/stellar/embedded-wallet-signer";
 import type { BankAccountDetails } from "../domain/entities/bank-account";
 import type { RampConfig } from "../domain/config";
 import { err } from "../domain/entities/errors";
@@ -28,10 +29,15 @@ export interface OfframpInput {
   quote: Quote;
 
   pubkey: string;
-  usdcAsset: string;
   cryptoWalletId?: string;
   walletAddress?: string;
   bankAccount?: BankAccountDetails;
+}
+
+export interface SettleEmbeddedOrderOptions {
+  pollIntervalMs?: number;
+
+  timeoutMs?: number;
 }
 
 export interface RampService {
@@ -40,10 +46,26 @@ export interface RampService {
   offramp(input: OfframpInput): Promise<Order>;
   getOrder(orderId: string): Promise<Order>;
 
-  provisionWallet(providerId: string): Promise<{
+  provisionWallet(
+    providerId: string,
+    signerPublicKeyPem: string,
+  ): Promise<{
     walletId: string;
     publicKey: string;
   }>;
+
+  settleEmbeddedOrder(
+    orderId: string,
+    signer: EmbeddedWalletSigner,
+    opts?: SettleEmbeddedOrderOptions,
+  ): Promise<Order>;
+}
+
+const DEFAULT_POLL_INTERVAL_MS = 5_000;
+const DEFAULT_TIMEOUT_MS = 5 * 60_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function createRamp(cfg: RampConfig): RampService {
@@ -96,7 +118,8 @@ class RampServiceImpl implements RampService {
       country: input.quote.country,
       fiat: input.quote.fiat,
       fiatAmount: input.quote.fiatAmount,
-      usdcAmount: input.quote.usdcAmount,
+      cryptoAmount: input.quote.cryptoAmount,
+      cryptoAsset: input.quote.cryptoAsset,
       pubkey: input.pubkey,
       walletAddress: input.walletAddress,
       customerId: ident.customerId,
@@ -116,12 +139,12 @@ class RampServiceImpl implements RampService {
     const provider = this.providerFor(input.quote.providerId);
 
     if (this.cfg.stellarWallet) {
-      const have = await this.cfg.stellarWallet.getUsdcBalance(
+      const have = await this.cfg.stellarWallet.getBalance(
         input.pubkey,
-        input.usdcAsset,
+        input.quote.cryptoAsset,
       );
-      if (lt(have, input.quote.usdcAmount))
-        throw err.insufficientBalance(have, input.quote.usdcAmount);
+      if (lt(have, input.quote.cryptoAmount))
+        throw err.insufficientBalance(have, input.quote.cryptoAmount);
     }
     const ident = await this.ensureIdentity(
       provider,
@@ -135,7 +158,8 @@ class RampServiceImpl implements RampService {
       country: input.quote.country,
       fiat: input.quote.fiat,
       fiatAmount: input.quote.fiatAmount,
-      usdcAmount: input.quote.usdcAmount,
+      cryptoAmount: input.quote.cryptoAmount,
+      cryptoAsset: input.quote.cryptoAsset,
       pubkey: input.pubkey,
       walletAddress: input.walletAddress,
       customerId: ident.customerId,
@@ -146,7 +170,6 @@ class RampServiceImpl implements RampService {
       cryptoWalletId: input.cryptoWalletId,
       customerId: ident.customerId,
       bankAccountId: ident.bankAccountId,
-      usdcAsset: input.usdcAsset,
     });
     this.orderProvider.set(order.id, provider.id);
     return order;
@@ -166,7 +189,10 @@ class RampServiceImpl implements RampService {
     throw err.orderNotFound(orderId);
   }
 
-  async provisionWallet(providerId: string): Promise<{
+  async provisionWallet(
+    providerId: string,
+    signerPublicKeyPem: string,
+  ): Promise<{
     walletId: string;
     publicKey: string;
   }> {
@@ -176,7 +202,43 @@ class RampServiceImpl implements RampService {
         `provider ${providerId} does not support embedded wallets (provisionWallet)`,
       );
     }
-    return provider.provisionWallet();
+    return provider.provisionWallet(signerPublicKeyPem);
+  }
+
+  async settleEmbeddedOrder(
+    orderId: string,
+    signer: EmbeddedWalletSigner,
+    opts: SettleEmbeddedOrderOptions = {},
+  ): Promise<Order> {
+    const pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+    const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const deadline = Date.now() + timeoutMs;
+
+    let order = await this.getOrder(orderId);
+    while (!order.approval && order.status !== "completed") {
+      if (Date.now() >= deadline) throw err.approvalTimeout(orderId, timeoutMs);
+      await sleep(pollIntervalMs);
+      order = await this.getOrder(orderId);
+    }
+    if (order.status === "completed") return order;
+    const approval = order.approval;
+    if (!approval) throw err.approvalTimeout(orderId, timeoutMs);
+
+    const signature = signer.sign(approval.approvalMessage);
+    const provider = this.providerFor(order.providerId);
+    await provider.submitApproval(orderId, {
+      approvalMessageId: approval.approvalMessageId,
+      approvalMessage: approval.approvalMessage,
+      signature,
+    });
+
+    let settled = await this.getOrder(orderId);
+    while (settled.status !== "completed") {
+      if (Date.now() >= deadline) throw err.approvalTimeout(orderId, timeoutMs);
+      await sleep(pollIntervalMs);
+      settled = await this.getOrder(orderId);
+    }
+    return settled;
   }
 
   private providerFor(providerId: string): RampProvider {

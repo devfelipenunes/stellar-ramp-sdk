@@ -16,7 +16,7 @@ describe("createStellarRamp — factory mock (DX)", () => {
     });
 
     expect(q.providerId).toBe("mock");
-    expect(Number(q.usdcAmount)).toBeGreaterThan(0);
+    expect(Number(q.cryptoAmount)).toBeGreaterThan(0);
     expect(Number(q.fee)).toBeGreaterThan(0);
   });
 
@@ -34,7 +34,7 @@ describe("createStellarRamp — factory mock (DX)", () => {
       fiatAmount: "100",
     });
 
-    expect(a.usdcAmount).toBe(b.usdcAmount);
+    expect(a.cryptoAmount).toBe(b.cryptoAmount);
     expect(a.fee).toBe(b.fee);
   });
 
@@ -191,7 +191,8 @@ describe("createStellarRamp — live com providers customizados", () => {
         country: "BR" as const,
         fiat: "BRL" as const,
         fiatAmount: "100",
-        usdcAmount: "18",
+        cryptoAmount: "18",
+        cryptoAsset: "USDC:ISSUER",
         feeBps: 30,
         fee: "0.3",
         createdAt: "2026-08-04T00:00:00Z",
@@ -199,6 +200,7 @@ describe("createStellarRamp — live com providers customizados", () => {
       createOnrampOrder: async () => ({}),
       createOfframpOrder: async () => ({}),
       getOrder: async () => ({}),
+      submitApproval: async () => ({ approvalMessageId: "a-1", completed: true }),
       createCustomer: async () => ({ customerId: "c-1" }),
       createBankAccount: async () => ({ bankAccountId: "b-1" }),
     } as unknown as RampProvider;

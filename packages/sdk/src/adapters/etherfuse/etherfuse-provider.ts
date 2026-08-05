@@ -1,4 +1,4 @@
-import { generateKeyPairSync, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   type BankAccountDetails,
   validateBankAccountDetails,
@@ -15,6 +15,8 @@ import type {
   OfframpOrderRequest,
   OnrampOrderRequest,
   RampProvider,
+  SignedApproval,
+  SimulatableProvider,
 } from "../../domain/ports/ramp-provider";
 
 export interface EtherfuseProviderOptions {
@@ -27,7 +29,7 @@ export interface EtherfuseProviderOptions {
 
   accountType?: "personal" | "business";
 
-  usdcAsset?: string;
+  defaultCryptoAsset?: string;
 
   blockchain?: string;
 
@@ -40,11 +42,13 @@ const DEFAULT_USDC_ASSET =
 
 export function createEtherfuseProvider(
   opts: EtherfuseProviderOptions,
-): RampProvider {
+): RampProvider & EmbeddedWalletProvider & SimulatableProvider {
   return new EtherfuseProvider(opts);
 }
 
-class EtherfuseProvider implements RampProvider, EmbeddedWalletProvider {
+class EtherfuseProvider
+  implements RampProvider, EmbeddedWalletProvider, SimulatableProvider
+{
   readonly id = "etherfuse";
   readonly countries: CountryCode[];
 
@@ -60,7 +64,15 @@ class EtherfuseProvider implements RampProvider, EmbeddedWalletProvider {
       throw new Error(
         "ETHERFUSE_API_KEY not configured via SecretProvider (ADR-007)",
       );
-    return { Authorization: key, "Content-Type": "application/json" };
+    return {
+      Authorization: key,
+      "Content-Type": "application/json",
+      // Sem isso, o sandbox às vezes nunca dispara o job assíncrono que gera a
+      // aprovação (a ordem trava em "funded" para sempre) quando a chamada reaproveita
+      // uma conexão keep-alive do undici — confirmado ao vivo comparando com curl
+      // (que fecha a conexão a cada request por padrão).
+      Connection: "close",
+    };
   }
 
   private async request<T>(
@@ -76,7 +88,11 @@ class EtherfuseProvider implements RampProvider, EmbeddedWalletProvider {
     if (!res.ok) {
       throw new Error(`etherfuse ${method} ${path} → HTTP ${res.status}`);
     }
-    return (await res.json()) as T;
+    try {
+      return (await res.json()) as T;
+    } catch {
+      return {} as T;
+    }
   }
 
   async quote(req: QuoteRequest): Promise<Quote> {
@@ -91,7 +107,8 @@ class EtherfuseProvider implements RampProvider, EmbeddedWalletProvider {
     }
 
     if (!req.customerId) throw err.quoteRequiresCustomer();
-    const usdc = this.opts.usdcAsset ?? DEFAULT_USDC_ASSET;
+    const cryptoAsset =
+      req.cryptoAsset ?? this.opts.defaultCryptoAsset ?? DEFAULT_USDC_ASSET;
     const raw = await this.request<unknown>("POST", "/ramp/quote", {
       quoteId: randomUUID(),
       customerId: req.customerId,
@@ -100,15 +117,15 @@ class EtherfuseProvider implements RampProvider, EmbeddedWalletProvider {
       ...(req.walletAddress
         ? { walletAddress: req.walletAddress }
         : { wallet: req.pubkey ?? "" }),
-      sourceAmount: req.fiatAmount ?? req.usdcAmount ?? "0",
+      sourceAmount: req.fiatAmount ?? req.cryptoAmount ?? "0",
       quoteAssets: {
         type: req.direction,
 
-        sourceAsset: req.direction === "onramp" ? req.fiat : usdc,
-        targetAsset: req.direction === "onramp" ? usdc : req.fiat,
+        sourceAsset: req.direction === "onramp" ? req.fiat : cryptoAsset,
+        targetAsset: req.direction === "onramp" ? cryptoAsset : req.fiat,
       },
     });
-    return normalizeQuote(raw, req, this.id);
+    return normalizeQuote(raw, req, this.id, cryptoAsset);
   }
 
   async createOnrampOrder(req: OnrampOrderRequest): Promise<Order> {
@@ -124,7 +141,7 @@ class EtherfuseProvider implements RampProvider, EmbeddedWalletProvider {
         ? { cryptoWalletId: req.cryptoWalletId }
         : { publicKey: req.pubkey }),
     });
-    return normalizeOrder(raw, this.id, "onramp");
+    return normalizeOrder(raw, this.id, "onramp", req.quote.cryptoAsset);
   }
 
   async createOfframpOrder(req: OfframpOrderRequest): Promise<Order> {
@@ -138,14 +155,12 @@ class EtherfuseProvider implements RampProvider, EmbeddedWalletProvider {
         ? { cryptoWalletId: req.cryptoWalletId }
         : { publicKey: req.pubkey }),
     });
-    return normalizeOrder(raw, this.id, "offramp");
+    return normalizeOrder(raw, this.id, "offramp", req.quote.cryptoAsset);
   }
 
-  async provisionWallet(): Promise<{ walletId: string; publicKey: string }> {
-    const { publicKey: ecPublic } = generateKeyPairSync("ec", {
-      namedCurve: "P-256",
-    });
-    const signerPublicKeyPem = ecPublic.export({ type: "spki", format: "pem" });
+  async provisionWallet(
+    signerPublicKeyPem: string,
+  ): Promise<{ walletId: string; publicKey: string }> {
     const raw = await this.request<Record<string, unknown>>(
       "POST",
       "/ramp/wallet",
@@ -165,16 +180,32 @@ class EtherfuseProvider implements RampProvider, EmbeddedWalletProvider {
     return normalizeOrder(raw, this.id, "onramp");
   }
 
+  async submitApproval(
+    orderId: string,
+    signed: SignedApproval,
+  ): Promise<{ approvalMessageId: string; completed: boolean }> {
+    const raw = await this.request<Record<string, unknown>>(
+      "POST",
+      `/ramp/order/${orderId}/approvals`,
+      signed,
+    );
+    return {
+      approvalMessageId: String(
+        raw.approvalMessageId ?? signed.approvalMessageId,
+      ),
+      completed: Boolean(raw.completed),
+    };
+  }
+
   async simulateFiatDeposit(orderId: string): Promise<Order> {
     if (this.opts.environment !== "sandbox") {
       throw new Error(
         "simulateFiatDeposit is sandbox-only (prod detects via SPEI)",
       );
     }
-    const raw = await this.request<unknown>(
-      "POST",
-      `/ramp/order/${orderId}/fiat_received`,
-    );
+    const raw = await this.request<unknown>("POST", "/ramp/order/fiat_received", {
+      orderId,
+    });
     return normalizeOrder(raw, this.id, "onramp");
   }
 
@@ -292,6 +323,7 @@ function normalizeQuote(
   raw: unknown,
   req: QuoteRequest,
   providerId: string,
+  cryptoAsset: string,
 ): Quote {
   const o = unwrap(raw);
   const feeBps = Number(o.feeBps ?? 25);
@@ -299,10 +331,10 @@ function normalizeQuote(
   const fiatAmount = String(
     o.sourceAmount ?? o.fiatAmount ?? req.fiatAmount ?? "0",
   );
-  const usdcAmount = String(
+  const cryptoAmount = String(
     isOnramp
-      ? (o.destinationAmount ?? req.usdcAmount ?? "0")
-      : (o.sourceAmount ?? req.usdcAmount ?? "0"),
+      ? (o.destinationAmount ?? req.cryptoAmount ?? "0")
+      : (o.sourceAmount ?? req.cryptoAmount ?? "0"),
   );
   return {
     quoteId: String(o.quoteId ?? ""),
@@ -311,7 +343,8 @@ function normalizeQuote(
     country: req.country,
     fiat: req.fiat,
     fiatAmount,
-    usdcAmount,
+    cryptoAmount,
+    cryptoAsset,
     feeBps,
     fee: String(o.feeAmount ?? o.fee ?? "0"),
     createdAt: String(o.createdAt ?? new Date().toISOString()),
@@ -322,6 +355,7 @@ function normalizeOrder(
   raw: unknown,
   providerId: string,
   direction: Order["direction"],
+  cryptoAsset = DEFAULT_USDC_ASSET,
 ): Order {
   const o = unwrap(raw);
   const id = pickId(o);
@@ -329,17 +363,33 @@ function normalizeOrder(
   const type = String(o.type ?? o.direction ?? "").toLowerCase();
   const actualDirection: Order["direction"] =
     type === "offramp" ? "offramp" : type === "onramp" ? "onramp" : direction;
+
+  const approvalRaw = o.approval as Json | undefined;
+  const approval = approvalRaw
+    ? {
+        approvalMessageId: String(approvalRaw.approvalMessageId ?? ""),
+        approvalMessage: String(approvalRaw.approvalMessage ?? ""),
+        summary: String(approvalRaw.summary ?? ""),
+      }
+    : undefined;
+
   return {
     id,
     providerId,
     direction: actualDirection,
     country: String(o.country ?? "MX"),
     fiat: String(o.fiat ?? "MXN"),
-    fiatAmount: String(o.fiatAmount ?? "0"),
-    usdcAmount: String(o.usdcAmount ?? "0"),
+    fiatAmount: String(o.fiatAmount ?? o.amountInFiat ?? "0"),
+    cryptoAmount: String(o.cryptoAmount ?? o.amountInTokens ?? "0"),
+    cryptoAsset: String(o.targetAsset ?? o.sourceAsset ?? cryptoAsset),
     status: pickStatus(o),
     createdAt: String(o.createdAt ?? new Date().toISOString()),
     updatedAt: String(o.updatedAt ?? o.createdAt ?? new Date().toISOString()),
     statusPageUrl: typeof o.statusPage === "string" ? o.statusPage : undefined,
+    approval,
+    stellarClaimableBalanceId:
+      typeof o.stellarClaimableBalanceId === "string"
+        ? o.stellarClaimableBalanceId
+        : undefined,
   };
 }

@@ -4,7 +4,12 @@ export type YieldErrorCode =
   | "unsupported_bond"
   | "no_nav_source_available"
   | "invalid_sep38_pair"
-  | "not_implemented";
+  | "not_implemented"
+  | "asset_not_found"
+  | "invalid_webhook_signature"
+  | "insufficient_balance_to_lock"
+  | "insufficient_unlocked_balance"
+  | "lock_not_found";
 
 export class YieldError extends Error {
   readonly code: YieldErrorCode;
@@ -51,4 +56,29 @@ export const yerr = {
       `TDD red phase — pending implementation: ${feature}`,
       { feature },
     ),
+  assetNotFound: (symbol: string) =>
+    new YieldError("asset_not_found", `Asset not found: ${symbol}`, {
+      symbol,
+    }),
+  invalidWebhookSignature: () =>
+    new YieldError(
+      "invalid_webhook_signature",
+      "Invalid Etherfuse webhook signature",
+    ),
+  insufficientBalanceToLock: (code: string, tokens: string) =>
+    new YieldError(
+      "insufficient_balance_to_lock",
+      `Insufficient balance to lock ${tokens} ${code}`,
+      { code, tokens },
+    ),
+  insufficientUnlockedBalance: (code: string) =>
+    new YieldError(
+      "insufficient_unlocked_balance",
+      `Insufficient unlocked balance for ${code}`,
+      { code },
+    ),
+  lockNotFound: (lockId: string) =>
+    new YieldError("lock_not_found", `Lock not found: ${lockId}`, {
+      lockId,
+    }),
 } as const;

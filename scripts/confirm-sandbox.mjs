@@ -224,7 +224,7 @@ const text = await res.text();
 await writeFile(`${OUT}/07_launch.json`, JSON.stringify({ status: res.status, url: res.url, body: text }, null, 2));
 console.log(`\n── POST /auth/launch → HTTP ${res.status} (final: ${res.url}) ──`);
 
-const unknownIssuer = /Unknown\s+issuer:\s*([^"<\\s]+)/i.exec(text)?.[1];
+const unknownIssuer = /Unknown\s+issuer:\s*([^"<\s]+)/i.exec(text)?.[1];
 const rejected = unknownIssuer || /invalid_client|error_description/i.test(text);
 console.log(`\n── POST /auth/launch: ${rejected ? "REJEITADO ⚠" : "LAUNCH ACEITO ✅"}`);
 if (rejected) {

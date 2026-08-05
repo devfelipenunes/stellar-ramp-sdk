@@ -13,13 +13,19 @@
     "test:tdd": "vitest run packages/sdk/tests",
     "typecheck": "tsc -p packages/sdk/tsconfig.json --noEmit && tsc -p packages/sdk/tsconfig.test.json && tsc -p packages/yield/tsconfig.json --noEmit && tsc -p packages/yield/tsconfig.test.json",
     "build": "tsc -b",
-    "build:publish": "tsup"
+    "build:publish": "tsup",
+    "example:basic": "tsx examples/basic.ts",
+    "example:mock": "tsx examples/yield-lock-demo.ts",
+    "example:live": "tsx --env-file=.env examples/etherfuse-yield-live.ts",
+    "example:flow": "tsx --env-file=.env examples/sdk-flow.ts"
   },
   "devDependencies": {
     "@stellar/stellar-base": "^15.0.0",
     "@types/node": "^22.0.0",
+    "canonicalize": "^2.0.0",
     "@vitest/coverage-v8": "^2.1.9",
     "tsup": "^8.5.1",
+    "tsx": "^4.19.0",
     "typescript": "^5.5.0",
     "vitest": "^2.1.0"
   }

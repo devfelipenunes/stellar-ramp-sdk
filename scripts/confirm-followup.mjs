@@ -34,7 +34,7 @@ async function req(name, path, init = {}) {
   return { status: res.status, json };
 }
 
-const CPF = "52998224725";
+const CPF = process.env.CPF ?? "52998224725";
 const EF_EMAIL = process.env.EF_EMAIL ?? "maria.silva@example.com";
 const PIX = { pixKey: EF_EMAIL, pixKeyType: "EMAIL" };
 
@@ -137,10 +137,11 @@ if (!bankAccountId) {
 }
 console.log("  bankAccountId:", bankAccountId || "(vazio)");
 
-const { publicKey: ecPublic } = generateKeyPairSync("ec", {
+const { publicKey: ecPublic, privateKey: ecPrivate } = generateKeyPairSync("ec", {
   namedCurve: "P-256",
 });
 const signerPublicKeyPem = ecPublic.export({ type: "spki", format: "pem" });
+const signerPrivateKeyPem = ecPrivate.export({ type: "pkcs8", format: "pem" });
 const w = await req("15_provision_wallet", "/ramp/wallet", {
   method: "POST",
   body: JSON.stringify({
@@ -151,6 +152,16 @@ const w = await req("15_provision_wallet", "/ramp/wallet", {
 const walletId = String(w.json?.walletId ?? "");
 const walletPub = String(w.json?.publicKey ?? "");
 console.log("  embedded wallet:", walletId, "| publicKey:", walletPub.slice(0, 16) + "…");
+
+// Guarda a chave do signer P-256 — por padrão o script descartava isso depois do POST
+// /ramp/wallet, mas é a única chance de testar se dá pra assinar sobre essa wallet depois
+// (pergunta em aberto: embedded wallet vs external wallet, ver tutorial.md seção 3).
+await mkdir("secrets/etherfuse", { recursive: true });
+await writeFile(
+  `secrets/etherfuse/embedded-wallet-${ORG}.json`,
+  JSON.stringify({ orgId: ORG, walletId, publicKey: walletPub, signerPrivateKeyPem }, null, 2),
+);
+console.log(`  chave do signer salva em secrets/etherfuse/embedded-wallet-${ORG}.json`);
 
 const q = await req("12_quote_brl", "/ramp/quote", {
   method: "POST",

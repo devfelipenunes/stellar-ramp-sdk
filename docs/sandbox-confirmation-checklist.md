@@ -97,6 +97,26 @@ compliant:true, status:"active", abbrClabe:"" }` — **fecha o TODO do
 - [x] **Offramp VALIDADO** (04/08/2026): quote `offramp` (USDC→BRL, feeBps 20)
       → 200 e ordem → 200 aninhada em `offramp.orderId` — shape real confirmado
 
+## Track Yield — `EtherfuseStablebondProvider` (2026-08-05)
+
+- [x] Implementado em TDD (`packages/yield/src/adapters/etherfuse/etherfuse-stablebond-provider.ts`
+      + `webhook.ts` + `keypair-signer.ts`), 29 testes novos, 133/133 no total, `fetch` mockado
+      (ver ADR-014). Payloads seguem o mesmo shape confirmado nesta pesquisa (`/ramp/assets`,
+      `/ramp/quote`, `/ramp/swap`, webhook `swap_updated`).
+- [x] **Validado contra o sandbox real (2026-08-05, 09:44 -03).** `pnpm example:live -- 3`
+      pediu swap de 3 USDC→TESOURO (customer `8c200036-ed1d-4455-8977-d2efb4aa1416`, wallet
+      `GBJSNIYHTK764KVZJ6HF4FECYCABZOHLVBE3SHQYIGDP6L7ZRTVVMHXY`). O webhook já deployado do
+      projeto irmão (`zolvency-yield-ramp/apps/demo`, mesma conta/organização Etherfuse)
+      processou sozinho — sem nenhuma configuração nova de webhook neste repositório. Saldo
+      confirmado via Horizon antes/depois: USDC `9.4017379 → 6.4017379` (-3, exato), TESOURO
+      `46.4878924 → 59.7207715` (+13.2328791). Transação:
+      [stellar.expert](https://stellar.expert/explorer/testnet/account/GBJSNIYHTK764KVZJ6HF4FECYCABZOHLVBE3SHQYIGDP6L7ZRTVVMHXY).
+      Um bug real apareceu e foi corrigido nesse processo: `POST /ramp/swap` devolve `200`
+      com corpo **vazio** — o código tentava `.json()` nele incondicionalmente e quebrava;
+      corrigido em `postSwap()` (checa só `res.ok`), com teste de regressão simulando corpo
+      vazio de verdade (não `{}` — esse detalhe é o que tinha mascarado o bug no teste
+      original).
+
 ## Pendências abertas
 
 - [ ] Integrar o **WebSDK `/idv`** no app para completar o KYC do usuário final

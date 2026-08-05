@@ -3,6 +3,8 @@ export type {
   YieldEngine,
   AutoParkInput,
   LiquidateInput,
+  LockInput,
+  UnlockResult,
 } from "./application/yield-engine";
 export { createStellarYield } from "./application/stellar-yield";
 export type { StellarYieldOptions } from "./application/stellar-yield";
@@ -18,4 +20,15 @@ export { toSep38Quote, sep38Amount } from "./application/sep38-quote";
 export type { Sep38Config } from "./application/sep38-quote";
 export { createEtherfuseNavSource } from "./adapters/etherfuse/etherfuse-nav-source";
 export type { EtherfuseNavSourceOptions } from "./adapters/etherfuse/etherfuse-nav-source";
+export { createEtherfuseStablebondProvider } from "./adapters/etherfuse/etherfuse-stablebond-provider";
+export type {
+  EtherfuseStablebondProviderOptions,
+  SwapConfirmation,
+} from "./adapters/etherfuse/etherfuse-stablebond-provider";
+export {
+  verifyEtherfuseWebhookSignature,
+  parseSwapUpdatedEvent,
+} from "./adapters/etherfuse/webhook";
+export type { SwapUpdatedEvent } from "./adapters/etherfuse/webhook";
+export { createKeypairSigner } from "./adapters/stellar/keypair-signer";
 export * from "./domain/index";

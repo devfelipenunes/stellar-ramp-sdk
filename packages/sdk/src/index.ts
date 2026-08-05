@@ -28,4 +28,4 @@ export { InMemoryIdentityStore } from "./adapters/memory/in-memory-identity-stor
 export { SqliteIdentityStore } from "./adapters/storage/sqlite-identity-store";
 export { createLiveStellarWallet } from "./adapters/stellar/live-stellar-wallet";
 export type { LiveStellarWalletOptions } from "./adapters/stellar/live-stellar-wallet";
-export * from "./domain";
+export * from "./domain/index";

@@ -18,4 +18,5 @@ jobs:
       - run: pnpm install
       - run: pnpm typecheck
       - run: pnpm build
+      - run: pnpm build:publish
       - run: pnpm test -- --coverage

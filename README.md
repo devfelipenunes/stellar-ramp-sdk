@@ -6,13 +6,13 @@ Desenvolvido por **SDD + TDD**: especificações (Gherkin/ADRs) primeiro, testes
 
 ## Status — 04/08/2026
 
-| Bloco                    | Estado                                                                                        |
-| ------------------------ | --------------------------------------------------------------------------------------------- |
-| **Track SDK (Ramp)**     | ✅ green — 60/60 testes (adapter Etherfuse real + **2-pass** + idv-launch + **factories DX**) |
-| **Track Yield (Engine)** | ✅ green — 27/27 testes (oracle + SEP-38 + **fonte real de NAV** + **factory DX**)            |
-| **Total**                | ✅ **99/99** · typecheck strict limpo                                                         |
-| **apps/demo**            | ✅ server HTTP + **CLI** (`run.ts`) + **E2E** (KYC /idv → gasto) + oráculo **NAV real**       |
-| **Sandbox Etherfuse**    | ✅ shapes reais confirmados (org 201, bank-account 201, **quote 200**, order 2-pass)          |
+| Bloco                    | Estado                                                                                                               |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| **Track SDK (Ramp)**     | ✅ green — 65/65 testes (adapter Etherfuse real + **2-pass** + idv-launch + **factories DX** + StellarWallet/SQLite) |
+| **Track Yield (Engine)** | ✅ green — 27/27 testes (oracle + SEP-38 + **fonte real de NAV** + **factory DX**)                                   |
+| **Total**                | ✅ **104/104** · typecheck strict limpo · **cobertura 92.8%** (gate no CI)                                           |
+| **apps/demo**            | ✅ server HTTP + **CLI** (`run.ts`) + **E2E** (KYC /idv → gasto) + oráculo **NAV real**                              |
+| **Sandbox Etherfuse**    | ✅ shapes reais confirmados (org 201, bank-account 201, **quote 200**, order 2-pass)                                 |
 
 ## O que é
 
@@ -168,8 +168,8 @@ const order = await ramp.onramp({
 - **`quote` real exige `pubkey`**: com provider Etherfuse, `ramp.quote()` sem
   `pubkey` não tem `customerId` e falha com `quote_requires_customer` (o mock
   funciona sem). Sempre passe a pubkey do usuário no `quote`.
-- **Offramp**: o shape do quote/order offramp é aproximado (`TODO(sandbox)`) —
-  validar na sandbox antes de produção.
+- **Offramp**: shape do quote/order **validado na sandbox** (04/08) — quote
+  `offramp` (USDC→fiat) + ordem aninhada em `offramp.orderId`.
 - **Idempotência**: `orderId`/`quoteId` são gerados a cada chamada; em retries,
   reutilize a mesma `orderId` para evitar ordem duplicada.
 
@@ -195,7 +195,7 @@ examples/basic.ts         # SDK puro em 4 linhas
 
 ```bash
 pnpm install
-pnpm test                 # 99/99 (SDK + Yield + E2E demo)
+pnpm test                 # 104/104 (SDK + Yield + E2E demo)
 pnpm typecheck            # tsc strict (src + testes de ambos os packages)
 bun apps/demo/run.ts      # demo CLI (fluxo completo, mock)
 bun apps/demo/server.ts   # demo HTTP em http://localhost:8787

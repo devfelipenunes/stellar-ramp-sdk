@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import type { Identity } from "../../domain/entities/identity";
 import type { IdentityStore } from "../../domain/ports/identity-store";
 
-const require = createRequire(import.meta.url);
+const require = createRequire(process.cwd() + "/");
 type Db = InstanceType<typeof import("node:sqlite").DatabaseSync>;
 
 export class SqliteIdentityStore implements IdentityStore {

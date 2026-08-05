@@ -83,7 +83,7 @@ requiresSwap, expiresAt (TTL ~2min)`.
 - [x] **KYC approved** via WebSDK `/idv` (email real + selfie; **scope = `verification`**,
       `idv` é rejeitado)
 - [x] **Conta PIX → 201**: `{ bankAccountId, customerId, currency:"brl",
-  compliant:true, status:"active", abbrClabe:"" }` — **fecha o TODO do
+compliant:true, status:"active", abbrClabe:"" }` — **fecha o TODO do
       createBankAccount** (`pickBankId` lê `bankAccountId` corretamente)
 - [x] **Quote BRL → 200** (`sourceAsset:"BRL"`, feeBps 20)
 - [x] **Ordem (2-pass)** — **completa** (`completed`): embedded wallet é o caminho.
@@ -94,10 +94,11 @@ requiresSwap, expiresAt (TTL ~2min)`.
       already exists" p/ mesma conta+valor → reusar a orderId. (wallet Stellar avulsa
       fundada+trustline NÃO basta — "Wallet not found or not authorized")
 
+- [x] **Offramp VALIDADO** (04/08/2026): quote `offramp` (USDC→BRL, feeBps 20)
+      → 200 e ordem → 200 aninhada em `offramp.orderId` — shape real confirmado
+
 ## Pendências abertas
 
-- [ ] Validar variante **offramp** do quote/order na sandbox (shape aproximado
-      simétrico hoje — `TODO(sandbox)` no adapter)
 - [ ] Integrar o **WebSDK `/idv`** no app para completar o KYC do usuário final
       (email/selfie/agreements) → destrava `compliant:true` → ordem fecha
 - [ ] Confirmar endpoints **KYB** para org business (verification KYB)

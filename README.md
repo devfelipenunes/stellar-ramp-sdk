@@ -9,7 +9,7 @@ Desenvolvido por **SDD + TDD**: especificações (Gherkin/ADRs) primeiro, testes
 
 | Bloco | Estado |
 | --- | --- |
-| **Pacote `@stellar-ramp/sdk`** | ✅ 88/88 testes · typecheck strict limpo · cobertura 96% (gate: linhas 90%) |
+| **Pacote `@stellar-ramp/sdk`** | ✅ 89/89 testes · typecheck strict limpo · cobertura 96% (gate: linhas 90%) |
 | **Onramp (PIX → TESOURO)** | ✅ validado ao vivo, de ponta a ponta, via este SDK — saldo real confirmado no Horizon |
 | **Offramp (TESOURO → BRL)** | ⚠️ burn cripto confirmado on-chain; status final da ordem às vezes trava em `"funded"` no sandbox (ver `Workflow-Manual-teste.md`) |
 
@@ -98,7 +98,7 @@ docs/adr/                 # ADRs (001–002/004–008/012–013 válidos; 003/00
 
 ```bash
 pnpm install
-pnpm test                 # 88/88
+pnpm test                 # 89/89
 pnpm test -- --coverage    # cobertura (gate: linhas 90%, funções 88%, branch 78%)
 pnpm typecheck             # tsc strict (src + testes)
 pnpm build:publish         # tsup (ESM + dts), artefato publicável no npm

@@ -329,7 +329,9 @@ function normalizeQuote(
   const feeBps = Number(o.feeBps ?? 25);
   const isOnramp = req.direction === "onramp";
   const fiatAmount = String(
-    o.sourceAmount ?? o.fiatAmount ?? req.fiatAmount ?? "0",
+    isOnramp
+      ? (o.sourceAmount ?? o.fiatAmount ?? req.fiatAmount ?? "0")
+      : (o.destinationAmount ?? o.fiatAmount ?? "0"),
   );
   const cryptoAmount = String(
     isOnramp

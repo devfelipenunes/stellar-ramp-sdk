@@ -322,6 +322,35 @@ describe("EtherfuseProvider — transporte (playbook §1–2)", () => {
     expect(res.feeBps).toBe(20);
   });
 
+  it("quote offramp usa destinationAmount como fiatAmount, não o sourceAmount ecoado", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        quoteId: "q-2",
+        sourceAmount: "10",
+        destinationAmount: "11.55",
+        feeBps: "20",
+        feeAmount: "0.02",
+        createdAt: "2026-08-06T00:00:00Z",
+      }),
+    });
+
+    const res = await provider.quote({
+      direction: "offramp",
+      country: "BR",
+      fiat: "BRL",
+      cryptoAmount: "10",
+      cryptoAsset:
+        "TESOURO:GC3CW7EDYRTWQ635VDIGY6S4ZUF5L6TQ7AA4MWS7LEQDBLUSZXV7UPS4",
+      pubkey: "G-X",
+      customerId: "org-1",
+    });
+
+    expect(res.cryptoAmount).toBe("10");
+    expect(res.fiatAmount).toBe("11.55");
+  });
+
   it("createOnrampOrder referencia quoteId real (2-pass) + orderId nosso", async () => {
     fetchMock.mockResolvedValue({
       ok: true,

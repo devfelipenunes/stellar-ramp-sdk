@@ -1,38 +1,76 @@
 # stellar-ramp-sdk
 
-**SDK de rampa fiat ⇄ Stablebond na Stellar**, via embedded wallet (Etherfuse) — PIX/SPEI
-direto para TESOURO/CETES/USTRY (ou USDC), sem hop intermediário, numa wallet só.
+**The fiat ⇄ Stablebond ramp for Stellar.** One SDK that moves PIX/SPEI straight
+into yield-bearing Stablebonds (TESOURO, CETES, USTRY) or USDC through a single
+embedded wallet — no intermediary hop, no self-custodied wallet. Built as the
+deliverable for two Stellar build sub-lanes, with spec-driven and test-driven
+development (Gherkin specs and ADRs first, tests that define the contract before
+the code).
 
-Desenvolvido por **SDD + TDD**: especificações (Gherkin/ADRs) primeiro, testes que definem o contrato antes do código.
+## Sub-lanes
 
-## Status — 05/08/2026
+### Stablebonds — consumer & DeFi
 
-| Bloco | Estado |
-| --- | --- |
-| **Pacote `@stellar-ramp/sdk`** | ✅ 89/89 testes · typecheck strict limpo · cobertura 96% (gate: linhas 90%) |
-| **Onramp (PIX → TESOURO)** | ✅ validado ao vivo, de ponta a ponta, via este SDK — saldo real confirmado no Horizon |
-| **Offramp (TESOURO → BRL)** | ⚠️ burn cripto confirmado on-chain; status final da ordem às vezes trava em `"funded"` no sandbox (ver `Workflow-Manual-teste.md`) |
+This sub-lane focuses on consumer and DeFi applications that leverage tokenized sovereign assets and yield-bearing financial products from Etherfuse. Builders should create products that make emerging-market yield accessible through intuitive user experiences, showcasing how Stablebonds can be integrated into savings, payroll, payments, lending, or investment applications for real-world financial use cases.
 
-## O que é
+Examples of what you can build:
 
-Uma única rota (ADR-015 — substitui o desenho anterior de duas tracks ligadas por USDC):
+- **BRL savings / neobank flow:** a consumer app that routes a BRL stablecoin balance into TESOURO to earn yield, with clean deposit/withdraw UX. _Good: working demo, funds visibly earning, one-tap in/out._
+- **Payroll-to-yield:** employer pays wages that auto-park in TESOURO until spent. _Good: end-to-end payroll demo with yield accrual._
+- **Yield-backed spending:** a card/PIX-style spend surface where the balance sits in Stablebonds until the moment of payment. _Good: spend flow that liquidates just-in-time._
+- **Stablebond DeFi composability:** use TESOURO/CETES/USTRY as collateral or LP in Blend or Soroswap. _Good: a working position with a clear risk/yield story._
+- **Multi-country yield index:** a product that blends several Stablebonds into one diversified sovereign-yield position. _Good: single token, transparent basket._
 
-```text
-PIX (BRL) → [ramp.onramp, cryptoAsset="TESOURO:..."] → embedded wallet recebe TESOURO
-TESOURO → [ramp.offramp, cryptoAsset="TESOURO:..."] → BRL na conta
-```
+### LATAM fiat on/off-ramp
 
-Não existe mais wallet autocustodiada nem swap USDC↔Stablebond no caminho principal — o
-ativo (TESOURO, CETES, USTRY, ou USDC) é só mais um parâmetro (`cryptoAsset`) do
-onramp/offramp. O modelo de assinatura é uma única chave **P-256** que a sua aplicação
-gera e guarda — a Etherfuse propõe a transação, você aprova assinando.
+This sub-lane is dedicated to improving fiat on/off-ramp experiences across Brazil and Latin America. Builders are encouraged to develop reusable tools, SDKs, integrations, and user-friendly payment experiences that make it easier for applications to connect with regional payment rails and stablecoin infrastructure. The goal is to reduce integration complexity while accelerating adoption of Stellar-based financial services throughout the region.
 
-## Uso
+Examples of what you can build:
+
+- **PIX ramp integration:** BRL in and out via PIX into an Etherfuse or Manteca USDC asset. _Good: a user goes from BRL to an on-chain asset and back in the demo._
+- **Ramp UX kit:** a reusable component/SDK other builders can drop in to add Etherfuse/Manteca ramp support. _Good: documented, importable, works in a second app._
+- **Multi-anchor router:** abstract Etherfuse, Manteca and Koywe behind one interface so an app picks the best ramp per country. _Good: one API, multiple anchors, live quotes._
+- **LATAM stablecoin dev kit:** a plug-and-play kit for a regional stablecoin (BRL, MXN) that plugs into x402/MPP. _Good: drop-in kit plus sample app._
+- **Cross-border remittance demo:** a PT/ES-localized remittance flow on a regional stablecoin. _Good: working corridor demo._
+
+## What this SDK delivers for these tracks
+
+### For the Stablebonds sub-lane
+
+The yield asset **is** the ramp asset. Deposit BRL via PIX and land directly in
+TESOURO/CETES/USTRY — the Stablebond is just a `cryptoAsset` parameter of
+onramp/offramp, so funds start earning from the moment they hit the wallet, with
+no USDC hop in between (ADR-015). The same SDK that on-ramps also liquidates
+just-in-time: offramp redeems the Stablebond back to BRL on a single key.
+That is the engine behind the savings/neobank, payroll-to-yield and
+yield-backed-spending flows above.
+
+### For the LATAM on/off-ramp sub-lane
+
+This SDK is the "Ramp UX kit" and the "Multi-anchor router" from the track:
+a single `RampProvider` port with swappable adapters (Etherfuse today,
+Manteca/Koywe next), PIX/SPEI in and out, and one API for
+quote → order → settle. It is a drop-in package another app can import and run
+in mock or live mode against the real sandbox.
+
+## Status — 2026-08-05
+
+| Block                           | State                                                                                                                               |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **`@stellar-ramp/sdk` package** | ✅ 89/89 tests · strict typecheck · 96% coverage (gate: 90% lines)                                                                  |
+| **Onramp (PIX → TESOURO)**      | ✅ validated live, end-to-end, via this SDK — real balance confirmed on Horizon                                                     |
+| **Offramp (TESOURO → BRL)**     | ⚠️ crypto burn confirmed on-chain; final order status occasionally sticks at `"funded"` in sandbox (see `Workflow-Manual-teste.md`) |
+
+## Quick start
 
 ```ts
 import {
-  createRamp, createEtherfuseProvider, createEnvSecretProvider,
-  createEmbeddedWalletSigner, generateEmbeddedWalletKeyPair, InMemoryIdentityStore,
+  createRamp,
+  createEtherfuseProvider,
+  createEnvSecretProvider,
+  createEmbeddedWalletSigner,
+  generateEmbeddedWalletKeyPair,
+  InMemoryIdentityStore,
 } from "@stellar-ramp/sdk";
 
 const etherfuse = createEtherfuseProvider({
@@ -47,28 +85,40 @@ const ramp = createRamp({
   identityStore: new InMemoryIdentityStore(),
 });
 
-// 1× — gera a chave da embedded wallet e provisiona
+// 1× — generate the embedded-wallet key and provision it
 const { publicKeyPem, privateKeyPem } = generateEmbeddedWalletKeyPair();
 const wallet = await ramp.provisionWallet("etherfuse", publicKeyPem);
-const signer = createEmbeddedWalletSigner(privateKeyPem); // guarde privateKeyPem com segurança
+const signer = createEmbeddedWalletSigner(privateKeyPem); // store privateKeyPem securely
 
-// depósito: PIX → TESOURO
+// deposit: PIX → TESOURO
 const quote = await ramp.quote({
-  direction: "onramp", country: "BR", fiat: "BRL", fiatAmount: "100",
-  cryptoAsset: "TESOURO:GC3CW7EDYRTWQ635VDIGY6S4ZUF5L6TQ7AA4MWS7LEQDBLUSZXV7UPS4",
-  pubkey: wallet.publicKey, walletAddress: wallet.publicKey,
+  direction: "onramp",
+  country: "BR",
+  fiat: "BRL",
+  fiatAmount: "100",
+  cryptoAsset:
+    "TESOURO:GC3CW7EDYRTWQ635VDIGY6S4ZUF5L6TQ7AA4MWS7LEQDBLUSZXV7UPS4",
+  pubkey: wallet.publicKey,
+  walletAddress: wallet.publicKey,
 });
 const order = await ramp.onramp({
-  quote, pubkey: wallet.publicKey, walletAddress: wallet.publicKey, cryptoWalletId: wallet.walletId,
+  quote,
+  pubkey: wallet.publicKey,
+  walletAddress: wallet.publicKey,
+  cryptoWalletId: wallet.walletId,
 });
 // (sandbox) await etherfuse.simulateFiatDeposit(order.id);
-const settled = await ramp.settleEmbeddedOrder(order.id, signer); // poll → assina → submete → poll
+const settled = await ramp.settleEmbeddedOrder(order.id, signer); // poll → sign → submit → poll
 ```
 
-### Modo mock (offline, determinístico)
+### Mock mode (offline, deterministic)
 
 ```ts
-import { createRamp, MockProvider, InMemoryIdentityStore } from "@stellar-ramp/sdk";
+import {
+  createRamp,
+  MockProvider,
+  InMemoryIdentityStore,
+} from "@stellar-ramp/sdk";
 
 const ramp = createRamp({
   mode: "mock",
@@ -77,46 +127,58 @@ const ramp = createRamp({
 });
 ```
 
-## Documentação
+## How the ramp works
 
-- **`SDK-implementation.md`** — guia de integração para outra aplicação (contratos, fluxo completo, limitações conhecidas).
-- **`Workflow-Manual-teste.md`** — como rodar `pnpm flow` e validar o fluxo real contra o sandbox.
-- **`AGENTS.md`** — onboarding completo para agentes de IA (arquitetura, gotchas, convenções).
-- **`docs/adr/`** — decisões de arquitetura, incluindo ADR-015 (a mudança para embedded wallet).
-- **`plan-refactor.md`** — registro da migração do desenho anterior (duas tracks/USDC/swap) para o atual.
-
-## Estrutura
-
-```
-packages/sdk/             # Único pacote — router, RampService, adapters mock|etherfuse|memory|stellar
-examples/pix-tesouro-brl.ts  # Exemplo único, roda contra o sandbox real (onramp + offramp)
-specs/features/           # Specs Gherkin (pt)
-docs/adr/                 # ADRs (001–002/004–008/012–013 válidos; 003/009–011/014 superseded por 015)
+```text
+PIX (BRL) → [ramp.onramp, cryptoAsset="TESOURO:..."] → embedded wallet receives TESOURO
+TESOURO → [ramp.offramp, cryptoAsset="TESOURO:..."] → BRL to bank account
 ```
 
-## Comandos
+There is no self-custodied wallet and no USDC↔Stablebond swap on the main path —
+the asset (TESOURO, CETES, USTRY, or USDC) is just a `cryptoAsset` parameter of
+onramp/offramp. The signing model is a single **P-256** key your application
+generates and keeps — Etherfuse proposes the transaction, you approve by signing.
+
+## Documentation
+
+- **`SDK-implementation.md`** — integration guide for another application (contracts, full flow, known limitations).
+- **`Workflow-Manual-teste.md`** — how to run `pnpm flow` and validate the real flow against the sandbox.
+- **`AGENTS.md`** — onboarding for AI agents (architecture, gotchas, conventions).
+- **`docs/adr/`** — architecture decision records, incl. ADR-015 (the move to embedded wallet).
+- **`plan-refactor.md`** — migration log from the previous design (two tracks/USDC/swap) to the current one.
+
+## Repository layout
+
+```
+packages/sdk/             # The single package — router, RampService, mock|etherfuse|memory|stellar adapters
+examples/pix-tesouro-brl.ts  # Single example, runs against the real sandbox (onramp + offramp)
+specs/features/           # Gherkin specs (pt)
+docs/adr/                 # ADRs (001–002/004–008/012–013 valid; 003/009–011/014 superseded by 015)
+```
+
+## Commands
 
 ```bash
 pnpm install
 pnpm test                 # 89/89
-pnpm test -- --coverage    # cobertura (gate: linhas 90%, funções 88%, branch 78%)
-pnpm typecheck             # tsc strict (src + testes)
-pnpm build:publish         # tsup (ESM + dts), artefato publicável no npm
-pnpm flow -- 10            # roda examples/pix-tesouro-brl.ts contra o sandbox real (R$10)
+pnpm test -- --coverage    # coverage (gate: lines 90%, functions 88%, branch 78%)
+pnpm typecheck             # tsc strict (src + tests)
+pnpm build:publish         # tsup (ESM + dts), publishable npm artifact
+pnpm flow -- 10            # runs examples/pix-tesouro-brl.ts against the real sandbox (R$10)
 ```
 
-## Pendências (externas / próximos)
+## Known limitations & next steps
 
-- [ ] Confirmar por que a ordem de offramp às vezes trava em `"funded"` mesmo com o burn confirmado on-chain (ver `Workflow-Manual-teste.md`)
-- [ ] Multi-tenant: hoje só existe uma embedded wallet por API key (o "customer raiz") — ver `SDK-implementation.md` §Limitações
-- [ ] Publicar no npm (precisa de `NPM_TOKEN`)
-- [ ] Etherfuse Brasil ainda não está em produção (só sandbox) — produção real hoje é só México
+- [ ] Confirm why the offramp order sometimes sticks at `"funded"` even with the burn confirmed on-chain (see `Workflow-Manual-teste.md`)
+- [ ] Multi-tenant: only one embedded wallet per API key today (the "root customer") — see `SDK-implementation.md` §Limitations
+- [ ] Publish to npm (needs `NPM_TOKEN`)
+- [ ] Etherfuse Brazil not in production yet (sandbox only) — real production today is Mexico only
 
-## Decisões de design (resumo)
+## Design decisions (summary)
 
-- **ADR-015** — Embedded wallet + aprovação P-256 substitui wallet autocustodiada + swap. Ativo genérico (`cryptoAsset`), não mais USDC fixo.
-- **ADR-002** — `RampProvider` como port → provider swappable, router multi-anchor.
-- **ADR-004** — Mock mode de 1ª classe → mesmo contrato do live, offline, determinístico.
-- **ADR-005** — Identidades 1× por usuário → evita "Bank account not found".
+- **ADR-015** — Embedded wallet + P-256 approval replaces self-custodied wallet + swap. Generic asset (`cryptoAsset`), no fixed USDC.
+- **ADR-002** — `RampProvider` as a port → swappable provider, multi-anchor router.
+- **ADR-004** — Mock mode as a first-class citizen → same contract as live, offline, deterministic.
+- **ADR-005** — 1× identity per user → avoids "Bank account not found".
 - **ADR-007** — Keys server-side only.
-- **ADR-013** — Contas bancárias por país (PIX/SPEI).
+- **ADR-013** — Bank accounts per country (PIX/SPEI).

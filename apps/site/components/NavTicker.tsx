@@ -1,7 +1,19 @@
-import { getNavs } from "@/lib/navs";
+"use client";
+import { useEffect, useState } from "react";
+import { FALLBACK_NAV, getNavs } from "@/lib/navs";
 
-export async function NavTicker() {
-  const navs = await getNavs();
+export function NavTicker() {
+  const [navs, setNavs] = useState(FALLBACK_NAV);
+
+  useEffect(() => {
+    let active = true;
+    getNavs().then((n) => {
+      if (active) setNavs(n);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div className="mt-14 grid gap-3 sm:grid-cols-3">

@@ -1,6 +1,6 @@
 export type NavEntry = { code: string; nav: string; fiat?: string };
 
-const FALLBACK_NAV: NavEntry[] = [
+export const FALLBACK_NAV: NavEntry[] = [
   { code: "TESOURO", nav: "1.2375", fiat: "BRL" },
   { code: "CETES", nav: "1.1747", fiat: "MXN" },
   { code: "USTRY", nav: "1.0712", fiat: "USD" },
@@ -8,9 +8,7 @@ const FALLBACK_NAV: NavEntry[] = [
 
 export async function getNavs(): Promise<NavEntry[]> {
   try {
-    const res = await fetch("https://api.etherfuse.com/lookup/stablebonds", {
-      next: { revalidate: 60 },
-    });
+    const res = await fetch("https://api.etherfuse.com/lookup/stablebonds");
     if (!res.ok) return FALLBACK_NAV;
     const data = await res.json();
     const bonds = Array.isArray(data) ? data : data?.stablebonds;

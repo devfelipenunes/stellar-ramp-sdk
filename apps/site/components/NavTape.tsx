@@ -1,7 +1,20 @@
-import { getNavs } from "@/lib/navs";
+"use client";
+import { useEffect, useState } from "react";
+import { FALLBACK_NAV, getNavs } from "@/lib/navs";
 
-export async function NavTape() {
-  const navs = await getNavs();
+export function NavTape() {
+  const [navs, setNavs] = useState(FALLBACK_NAV);
+
+  useEffect(() => {
+    let active = true;
+    getNavs().then((n) => {
+      if (active) setNavs(n);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const items = [...navs, ...navs, ...navs];
 
   return (

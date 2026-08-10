@@ -1,11 +1,29 @@
 # stellar-ramp-sdk
 
+<p align="center">
+  <a href="https://stellar-ramp-sdk.vercel.app/">
+    <img src="https://img.shields.io/badge/%F0%9F%9A%80_Live_docs-stellar--ramp--sdk.vercel.app-7C3AED?style=for-the-badge&labelColor=111" alt="Live docs — stellar-ramp-sdk.vercel.app" />
+  </a>
+  <a href="https://github.com/devfelipenunes/stellar-ramp-sdk">
+    <img src="https://img.shields.io/badge/GitHub-devfelipenunes%2Fstellar--ramp--sdk-111?style=for-the-badge&labelColor=7C3AED" alt="GitHub" />
+  </a>
+</p>
+
 **The fiat ⇄ Stablebond ramp for Stellar.** One SDK that moves PIX/SPEI straight
 into yield-bearing Stablebonds (TESOURO, CETES, USTRY) or USDC through a single
 embedded wallet — no intermediary hop, no self-custodied wallet. Built as the
 deliverable for two Stellar build sub-lanes, with spec-driven and test-driven
 development (Gherkin specs and ADRs first, tests that define the contract before
 the code).
+
+## Live docs — try it now
+
+> ### 🚀 **[stellar-ramp-sdk.vercel.app](https://stellar-ramp-sdk.vercel.app/)**
+>
+> The public documentation site for this SDK, deployed on Vercel. It is the
+> **primary onboarding surface** for the project — open it to follow the
+> **quickstart**, understand the **architecture**, and browse the full
+> **API reference**. If you are evaluating or integrating the SDK, start here.
 
 ## Sub-lanes
 
@@ -141,6 +159,7 @@ generates and keeps — Etherfuse proposes the transaction, you approve by signi
 
 ## Documentation
 
+- **Live docs site (primary)** — [https://stellar-ramp-sdk.vercel.app/](https://stellar-ramp-sdk.vercel.app/): quickstart, architecture, API reference and production notes.
 - **`SDK-implementation.md`** — integration guide for another application (contracts, full flow, known limitations).
 - **`Workflow-Manual-teste.md`** — how to run `pnpm flow` and validate the real flow against the sandbox.
 - **`AGENTS.md`** — onboarding for AI agents (architecture, gotchas, conventions).
@@ -152,6 +171,7 @@ generates and keeps — Etherfuse proposes the transaction, you approve by signi
 ```
 packages/sdk/             # The single package — router, RampService, mock|etherfuse|memory|stellar adapters
 examples/pix-tesouro-brl.ts  # Single example, runs against the real sandbox (onramp + offramp)
+apps/site/                # Docs site source (Next.js) — deployed at https://stellar-ramp-sdk.vercel.app/
 specs/features/           # Gherkin specs (pt)
 docs/adr/                 # ADRs (001–002/004–008/012–013 valid; 003/009–011/014 superseded by 015)
 ```
